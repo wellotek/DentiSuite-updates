@@ -1,0 +1,84 @@
+{
+  "name": "dentisuite",
+  "productName": "DentiSuite",
+  "version": "3.1.2",
+  "description": "Gestion complète d'un cabinet dentaire",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && electron .",
+    "dev:cloud": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron:cloud\"",
+    "dev:electron:cloud": "wait-on http://127.0.0.1:5173 && cross-env DENTISUITE_APP_MODE=CLOUD DENTISUITE_API_BASE_URL=http://127.0.0.1:3001 electron .",
+    "dev:cloud-probe": "npm run dev:cloud",
+    "dev:electron:cloud-probe": "npm run dev:electron:cloud",
+    "dev:legacy": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron:legacy\"",
+    "dev:electron:legacy": "wait-on http://127.0.0.1:5173 && cross-env DENTISUITE_APP_MODE=LEGACY electron .",
+    "start:cloud": "cross-env DENTISUITE_APP_MODE=CLOUD electron .",
+    "start:legacy": "cross-env DENTISUITE_APP_MODE=LEGACY electron .",
+    "build": "tsc --noEmit && vite build",
+    "build:win": "npm run build && electron-builder --win",
+    "start": "electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "api:dev": "npm --prefix apps/api run dev",
+    "api:build": "npm --prefix apps/api run build",
+    "api:start": "npm --prefix apps/api run start",
+    "api:test": "npm --prefix apps/api run test",
+    "api:typecheck": "npm --prefix apps/api run typecheck"
+  },
+  "build": {
+    "appId": "com.dentisuite.app",
+    "productName": "DentiSuite",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/dev-renderer-url.cjs",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "DentiSuite-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "lucide-react": "^0.525.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.3",
+    "zustand": "^5.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^37.2.1",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4",
+    "jsdom": "^26.1.0",
+    "wait-on": "^8.0.3"
+  }
+}

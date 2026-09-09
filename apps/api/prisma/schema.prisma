@@ -1,0 +1,591 @@
+// DentiSuite API — Phase 6A migration dry-run foundation.
+// Clinical: Patient … Prosthesis. Migration status is process/org-scoped, not clinical.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Optional for pooled providers (e.g. Supabase transaction pooler).
+  // Set DIRECT_URL to the non-pooled connection when using migrate/deploy.
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipRole {
+  ADMIN
+  ASSISTANT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum LicenseBindingStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+  PENDING
+}
+
+/// Cabinet JSON → Cloud migration process state.
+/// Not written by dry-run. Staging APPLY owns writes. Production APPLY execution is disabled.
+enum OrganizationMigrationStatus {
+  NOT_STARTED
+  DRY_RUN
+  READY_FOR_APPROVAL
+  APPROVED
+  APPLYING
+  MIGRATED
+  VERIFYING
+  VERIFIED
+  FAILED
+  ABANDONED
+}
+
+/// API account identity. Independent from clinical Dentist records (User != Dentist).
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  /// Normalized lowercase trimmed email (technical / recovery).
+  email             String     @unique
+  /// Login handle (preferred for team members). Unique when set.
+  username          String?    @unique
+  /// Display name shown in UI and audit trail.
+  displayName       String?
+  passwordHash      String
+  status            UserStatus @default(ACTIVE)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  disabledAt        DateTime?
+
+  sessions    Session[]
+  devices     Device[]
+  memberships Membership[]
+  auditLogs   AuditLog[] @relation("AuditActor")
+
+  @@index([status])
+  @@index([username])
+}
+
+/// Opaque bearer session. Raw token is NEVER stored — only tokenHash (SHA-256).
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  deviceId   String?   @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+}
+
+/// Client device metadata for session visibility / remote revoke.
+/// Device is NOT a license seat.
+model Device {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  /// Client-supplied stable identifier (e.g. install UUID). Scoped per user.
+  deviceIdentifier String
+  platform         String?
+  name             String?
+  createdAt        DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  revokedAt        DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@unique([userId, deviceIdentifier])
+  @@index([userId])
+}
+
+/// Cabinet / tenant boundary. One Organization = one DentiSuite cabinet.
+model Organization {
+  id        String             @id @default(uuid()) @db.Uuid
+  name      String
+  /// Stable unique identifier (slug).
+  slug      String             @unique
+  status    OrganizationStatus @default(ACTIVE)
+  /// Optional clinic contact (commercial onboarding).
+  phone     String?
+  city      String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  memberships      Membership[]
+  licenseBinding   LicenseBinding?
+  /// 1:1 process row. Dry-run never creates it. Staging APPLY owns writes.
+  migration        OrganizationMigration?
+  patients         Patient[]
+  appointments     Appointment[]
+  clinicalSessions ClinicalSession[]
+  treatments       Treatment[]
+  prescriptions     Prescription[]
+  prescriptionItems PrescriptionItem[]
+  dentists          Dentist[]
+  patientMedia      PatientMedia[]
+  invoices          Invoice[]
+  stockItems        StockItem[]
+  prostheses        Prosthesis[]
+  auditLogs         AuditLog[]
+
+  @@index([status])
+}
+
+/// Links a User to an Organization. Role is bootstrap-only; full RBAC is Phase 4.
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  organizationId String           @db.Uuid
+  role           MembershipRole
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  disabledAt     DateTime?
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissionOverrides MembershipPermissionOverride[]
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+}
+
+/// Internal binding foundation: 1 License ↔ 1 Organization (single-cabinet SKU).
+/// Not populated by License Manager HTTP calls in Phase 3.
+model LicenseBinding {
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String               @unique @db.Uuid
+  licenseId       String               @unique
+  maxUsers        Int
+  status          LicenseBindingStatus @default(PENDING)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  lastValidatedAt DateTime?
+  expiresAt       DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// Migration process for one Organization. Not a clinical entity.
+/// Dry-run never writes this row. Staging APPLY owns status transitions.
+model OrganizationMigration {
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @unique @db.Uuid
+  status         OrganizationMigrationStatus  @default(NOT_STARTED)
+  lastDryRunAt   DateTime?
+  lastAppliedAt  DateTime?
+  lastVerifiedAt DateTime?
+  lastFailedAt   DateTime?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+/// Canonical permission catalog (seeded from code vocabulary).
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+  overrides       MembershipPermissionOverride[]
+}
+
+/// Role → permission defaults mirrored from code via idempotent seed.
+model RolePermission {
+  id           String         @id @default(uuid()) @db.Uuid
+  role         MembershipRole
+  permissionId String         @db.Uuid
+  createdAt    DateTime       @default(now())
+
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([role])
+}
+
+/// Per-membership ALLOW/DENY override. DENY beats role ALLOW.
+model MembershipPermissionOverride {
+  id           String           @id @default(uuid()) @db.Uuid
+  membershipId String           @db.Uuid
+  permissionId String           @db.Uuid
+  effect       PermissionEffect
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, permissionId])
+  @@index([membershipId])
+  @@index([permissionId])
+}
+
+/// Clinical patient dossier (mirrors local DentiSuite Patient fields).
+/// Belongs to Organization (cabinet), not to a User/Assistant.
+/// Hard-delete matches current local store semantics (no soft-delete).
+model Patient {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  firstName      String
+  lastName       String
+  phone          String
+  age            Int
+  address        String
+  antecedents    String
+  hasAllergies   Boolean  @default(false)
+  /// Optional treating dentist reference (opaque until Dentist cloud table exists).
+  dentistId      String?
+  /// Odontogram map: Record<toothNumber, ToothRecord> as JSON.
+  teeth          Json     @default("{}")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments     Appointment[]
+  clinicalSessions ClinicalSession[]
+  treatments       Treatment[]
+  prescriptions    Prescription[]
+  mediaFiles       PatientMedia[]
+  invoices         Invoice[]
+  prostheses       Prosthesis[]
+
+  @@index([organizationId, id])
+  @@index([organizationId, lastName, firstName])
+  @@index([organizationId, phone])
+}
+
+/// Agenda appointment (mirrors local DentiSuite Appointment).
+/// date = calendar day YYYY-MM-DD; time = local wall-clock HH:mm; durationMin = length.
+/// Hard-delete matches local store. No scheduling conflict engine.
+model Appointment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  patientId      String   @db.Uuid
+  /// Calendar date (UTC midnight of the civil date) — API exposes YYYY-MM-DD.
+  date           DateTime @db.Date
+  /// Local clinic wall-clock time HH:mm (not timezone-converted).
+  time           String
+  durationMin    Int
+  patientName    String
+  patientPhone   String
+  motif          String
+  practitioner   String
+  /// Opaque until Dentist cloud table exists.
+  dentistId      String?
+  status         String
+  category       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@index([organizationId, patientId])
+  @@index([organizationId, dentistId])
+  @@index([organizationId, status])
+  @@index([organizationId, id])
+}
+
+/// Local PatientSession ("séance") — visit notes timeline.
+/// Independent from Treatment (siblings under Patient, not parent/child).
+/// API path uses /consultations to align with RBAC consultations.*.
+/// Hard-delete. prescription here is free-text notes, NOT Prescription entity.
+model ClinicalSession {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  patientId      String   @db.Uuid
+  date           DateTime @db.Date
+  time           String
+  /// Tooth numbers referenced in the visit (string[]).
+  teeth          Json     @default("[]")
+  acts           String
+  notes          String
+  /// Free-text prescription notes (not the Prescriptions domain).
+  prescription   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, date])
+  @@index([organizationId, id])
+}
+
+/// Local Treatment — care line on patient chart (not nested under ClinicalSession).
+/// Hard-delete. Does not create Invoice rows in this phase (billing later).
+model Treatment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  patientId      String   @db.Uuid
+  date           DateTime @db.Date
+  tooth          String
+  act            String
+  code           String
+  cost           Float
+  comment        String   @default("")
+  careStatus     String
+  paymentStatus  String
+  /// Optional act catalog reference (opaque until ActCatalog cloud exists).
+  actId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  invoices     Invoice[]
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, date])
+  @@index([organizationId, id])
+}
+
+/// Local Prescription (clinic.prescriptions) — structured ordonnance with line items.
+/// Distinct from ClinicalSession.prescription (free-text session notes).
+/// No sessionId locally. dentistId opaque. Hard-delete cascades lines.
+model Prescription {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// Required in Cloud (local allows walk-in without patientId).
+  patientId      String   @db.Uuid
+  /// Denormalized patient display name (matches local patientName).
+  patientName    String
+  date           DateTime @db.Date
+  title          String
+  /// Client-side template catalog id (opaque, not a Cloud FK).
+  templateId     String?
+  advice         String   @default("")
+  /// Opaque until Dentist cloud table exists.
+  dentistId      String?
+  dentistName    String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  lines        PrescriptionItem[]
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, date])
+  @@index([organizationId, id])
+}
+
+/// Local PrescriptionLine — embedded lines saved with the prescription document.
+model PrescriptionItem {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  prescriptionId String @db.Uuid
+  drug           String
+  posology       String @default("")
+  duration       String @default("")
+  notes          String @default("")
+  /// Stable ordering within the prescription.
+  sortOrder      Int    @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, prescriptionId])
+  @@index([prescriptionId, sortOrder])
+}
+
+/// Local Dentist (clinic.dentists) — clinical practitioner directory.
+/// Dentist ≠ User (no mandatory login). Opaque dentistId on clinical tables stays String (no FK).
+/// Hard-delete; assignment clearing on Patient/Appointment mirrors local store (not Prescription).
+model Dentist {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  firstName      String
+  lastName       String
+  specialty      String
+  /// Photo as data URL or empty (matches local).
+  photo          String   @default("")
+  /// Agenda color hex (e.g. #0e628e).
+  color          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, id])
+  @@index([organizationId, lastName, firstName])
+  @@index([organizationId, specialty])
+}
+
+enum PatientMediaStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// Local PatientMedia (clinic.mediaFiles) — metadata only; bytes in object storage.
+/// Not DICOMWeb/PACS. Hard-delete metadata + object. No base64 in DB.
+model PatientMedia {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  patientId      String             @db.Uuid
+  /// Server-generated: org/{orgId}/patients/{patientId}/media/{mediaId}{ext}
+  storageKey     String
+  title          String
+  kind           String
+  mime           String
+  originalName   String
+  /// Declared/verified byte size.
+  size           Int
+  status         PatientMediaStatus @default(PENDING)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, storageKey])
+  @@index([organizationId, patientId])
+  @@index([organizationId, id])
+  @@index([organizationId, status])
+}
+
+/// Local Invoice (clinic.invoices) — finance "transaction" row.
+/// No separate Payment entity: paid is a boolean (Payé vs Facturé).
+/// Amount is whole DA (Algerian dinars), matching local Math.round.
+/// No sequential invoice numbers locally. Hard-delete.
+/// Optional treatmentId when linked from a Treatment care line.
+model Invoice {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// Required in Cloud (local allows walk-in without patientId).
+  patientId      String   @db.Uuid
+  /// Denormalized patient display name (matches local).
+  patientName    String
+  label          String
+  /// Whole DA (integer dinars). Currency fixed: DA.
+  amount         Int
+  paid           Boolean  @default(false)
+  date           DateTime @db.Date
+  /// Optional link to Treatment (same org + same patient).
+  treatmentId    String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  treatment    Treatment?   @relation(fields: [treatmentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, date])
+  @@index([organizationId, paid])
+  @@index([organizationId, id])
+  @@index([organizationId, treatmentId])
+}
+
+/// Local StockItem (clinic.stockItems) — current quantity only, no movements.
+/// quantity/minQuantity/unitPrice are integers (local Math.round). unitPrice = whole DA.
+/// expiryDate optional. Hard-delete; not referenced by Invoice/Treatment.
+model StockItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  code           String
+  name           String
+  category       String
+  quantity       Int
+  minQuantity    Int
+  /// Whole DA unit price.
+  unitPrice      Int
+  addedAt        DateTime  @db.Date
+  expiryDate     DateTime? @db.Date
+  supplier       String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, id])
+  @@index([organizationId, category])
+  @@index([organizationId, name])
+}
+
+/// Local Prosthesis (clinic.prostheses) — lab tracking row.
+/// Patient-linked. No Treatment/Dentist FK. lab is free text. Hard-delete.
+model Prosthesis {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  patientId      String   @db.Uuid
+  patientName    String
+  type           String
+  tooth          String
+  lab            String
+  sentAt         DateTime @db.Date
+  expectedAt     DateTime? @db.Date
+  notes          String   @default("")
+  /// envoye | fabrication | recu | pose | annulee
+  status         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, patientId])
+  @@index([organizationId, status])
+  @@index([organizationId, id])
+}
+
+/// Server-side audit trail — who did what in which cabinet.
+model AuditLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @db.Uuid
+  actorUserId      String?  @db.Uuid
+  actorUsername    String?
+  actorDisplayName String?
+  actorRole        String?
+  action           String
+  module           String
+  resourceType     String?
+  resourceId       String?
+  summary          String?
+  details          Json?
+  createdAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action])
+  @@index([organizationId, resourceId])
+  @@index([actorUserId])
+}

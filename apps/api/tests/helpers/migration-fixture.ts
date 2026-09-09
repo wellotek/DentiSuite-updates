@@ -1,0 +1,1021 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export const FIXTURE_ORG_ID = '11111111-1111-4111-8111-111111111111';
+
+const PHOTO_BYTES = Buffer.from('fake-png-bytes');
+const DICOM_BYTES = Buffer.from('DICM-generic-file');
+const MISMATCH_BYTES = Buffer.from('tiny');
+
+export function writeMigrationFixture(root: string): {
+  sourceJsonPath: string;
+  sourceMediaRoot: string;
+  duplicateJsonPath: string;
+  v7JsonPath: string;
+  malformedJsonPath: string;
+  photoSize: number;
+} {
+  const mediaRoot = join(root, 'media');
+  mkdirSync(join(mediaRoot, 'p1'), { recursive: true });
+  writeFileSync(join(mediaRoot, 'p1', 'photo.png'), PHOTO_BYTES);
+  writeFileSync(join(mediaRoot, 'p1', 'scan.dcm'), DICOM_BYTES);
+  writeFileSync(join(mediaRoot, 'p1', 'mismatch.jpg'), MISMATCH_BYTES);
+
+  const clinic = {
+    schemaVersion: 8,
+    organizationId: 'should-be-ignored',
+    dentists: [
+      {
+        id: 'd1',
+        firstName: 'Amine',
+        lastName: 'El Amrani',
+        specialty: 'Omnipratique',
+        photo: '',
+        color: '#0e628e',
+      },
+    ],
+    patients: [
+      {
+        id: 'p1',
+        firstName: 'Sophie',
+        lastName: 'Martin',
+        phone: '0550000000',
+        age: 34,
+        address: 'Alger',
+        antecedents: 'Aucun',
+        hasAllergies: false,
+        dentistId: 'd1',
+        teeth: { '11': { number: '11', status: 'saine' } },
+        notes: null,
+      },
+      {
+        id: 'p-empty',
+        firstName: 'No',
+        lastName: 'Phone',
+        phone: '',
+        age: 20,
+        address: '',
+        antecedents: '',
+        hasAllergies: false,
+        teeth: {},
+      },
+      {
+        id: 'p-ghost-dentist',
+        firstName: 'Orphan',
+        lastName: 'DentistRef',
+        phone: '0550111111',
+        age: 40,
+        address: '',
+        antecedents: '',
+        hasAllergies: false,
+        dentistId: 'd-missing',
+        teeth: {},
+      },
+    ],
+    appointments: [
+      {
+        id: 'a1',
+        date: '2026-08-19',
+        time: '09:00',
+        durationMin: 30,
+        patientId: 'p1',
+        patientName: 'Sophie Martin SNAPSHOT',
+        patientPhone: 'OLD-PHONE',
+        motif: 'Contrôle',
+        practitioner: 'Dr. Amine El Amrani',
+        dentistId: 'd1',
+        status: 'confirme',
+        category: 'controle',
+      },
+      {
+        id: 'a-orphan',
+        date: '2026-08-19',
+        time: '10:00',
+        durationMin: 30,
+        patientId: 'p-nope',
+        patientName: 'Ghost',
+        patientPhone: '',
+        motif: 'X',
+        practitioner: '',
+        status: 'confirme',
+        category: 'consultation',
+      },
+      {
+        id: 'a-invalid',
+        date: '2026-99-99',
+        time: '09:00',
+        durationMin: 30,
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        patientPhone: '0550000000',
+        motif: 'X',
+        practitioner: '',
+        dentistId: 'd1',
+        status: 'confirme',
+        category: 'consultation',
+      },
+    ],
+    sessions: [
+      {
+        id: 'ses1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        time: '09:30',
+        teeth: ['11'],
+        acts: 'Contrôle',
+        notes: 'RAS',
+        prescription: 'KEEP_FREE_TEXT_XYZ',
+      },
+    ],
+    treatments: [
+      {
+        id: 't1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        tooth: '11',
+        act: 'Composite',
+        code: 'SO-20',
+        cost: 6000,
+        comment: '',
+        careStatus: 'fait',
+        paymentStatus: 'paye',
+        actId: 'act-s02',
+      },
+      {
+        id: 't-float',
+        patientId: 'p1',
+        date: '2026-08-19',
+        tooth: '21',
+        act: 'Composite',
+        code: 'SO-20',
+        cost: 12.7,
+        comment: '',
+        careStatus: 'a_faire',
+        paymentStatus: 'en_attente',
+      },
+    ],
+    prescriptions: [
+      {
+        id: 'rx1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin RX',
+        date: '2026-08-18',
+        title: 'Antalgique',
+        templateId: 'tpl-antalgique',
+        dentistId: 'd1',
+        dentistName: 'Dr. Amine El Amrani',
+        advice: 'Repos',
+        lines: [
+          {
+            id: 'rxl1',
+            drug: 'Paracétamol 1 g',
+            posology: '1 cp',
+            duration: '3 jours',
+            notes: '',
+          },
+        ],
+      },
+      {
+        id: 'rx-walkin',
+        patientName: 'Walk-in',
+        date: '2026-08-18',
+        title: 'Ordonnance',
+        advice: '',
+        dentistName: '',
+        lines: [{ id: 'rxl-w', drug: 'Ibuprofène', posology: '', duration: '', notes: '' }],
+      },
+      {
+        id: 'rx-empty',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        date: '2026-08-18',
+        title: 'Vide',
+        advice: '',
+        dentistName: '',
+        lines: [],
+      },
+    ],
+    invoices: [
+      {
+        id: 'i1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin INV',
+        label: 'Composite',
+        amount: 6000,
+        paid: true,
+        date: '2026-08-19',
+        treatmentId: 't1',
+      },
+      {
+        id: 'i-walkin',
+        patientName: 'Walk-in',
+        label: 'Consult',
+        amount: 2500,
+        paid: true,
+        date: '2026-08-19',
+      },
+      {
+        id: 'i-zero',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        label: 'Zero',
+        amount: 0,
+        paid: false,
+        date: '2026-08-19',
+      },
+      {
+        id: 'i-float',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        label: 'Float',
+        amount: 10.5,
+        paid: true,
+        date: '2026-08-19',
+      },
+      {
+        id: 'i-orphan-t',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        label: 'Orphan treatment',
+        amount: 1500,
+        paid: true,
+        date: '2026-08-19',
+        treatmentId: 't-gone',
+      },
+    ],
+    stockItems: [
+      {
+        id: 'st1',
+        code: 'DNT-RES',
+        name: 'Dents en résine',
+        category: 'prothese',
+        quantity: 5,
+        minQuantity: 2,
+        unitPrice: 14500,
+        addedAt: '2026-06-15',
+        expiryDate: '',
+        supplier: 'Céramilab',
+      },
+    ],
+    prostheses: [
+      {
+        id: 'pr-envoye',
+        type: 'Bridge',
+        tooth: '24-26',
+        patientId: 'p1',
+        patientName: 'Sophie Martin PROTH',
+        lab: 'Atlas',
+        sentAt: '2026-08-18',
+        expectedAt: '2026-09-02',
+        notes: '',
+        status: 'envoye',
+      },
+    ],
+    mediaFiles: [
+      {
+        id: 'med-ok',
+        patientId: 'p1',
+        title: 'Radio',
+        kind: 'image',
+        mime: 'image/png',
+        originalName: 'photo.png',
+        filename: 'photo.png',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: PHOTO_BYTES.length,
+      },
+      {
+        id: 'med-dicom',
+        patientId: 'p1',
+        title: 'Scan',
+        kind: 'dicom',
+        mime: 'application/dicom',
+        originalName: 'scan.dcm',
+        filename: 'scan.dcm',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: DICOM_BYTES.length,
+      },
+      {
+        id: 'med-missing',
+        patientId: 'p1',
+        title: 'Missing',
+        kind: 'image',
+        mime: 'image/jpeg',
+        originalName: 'gone.jpg',
+        filename: 'gone.jpg',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: 100,
+      },
+      {
+        id: 'med-mismatch',
+        patientId: 'p1',
+        title: 'Mismatch',
+        kind: 'image',
+        mime: 'image/jpeg',
+        originalName: 'mismatch.jpg',
+        filename: 'mismatch.jpg',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: 99999,
+      },
+    ],
+    settings: {
+      name: 'Cabinet Fixture',
+      address: 'Alger',
+      phone: '021',
+      email: 'x@y.z',
+      logo: '',
+      adminPhoto: '',
+      dateFormat: 'long',
+      timeFormat: '24h',
+      timezone: 'Africa/Algiers',
+      locale: 'fr',
+    },
+    actCatalog: [{ id: 'act-s02', code: 'SO-20', name: 'Composite', category: 'soin', tariff: 6000, favorite: true, toothStatus: 'obturation' }],
+  };
+
+  const store = { clinic, zoomFactor: 1.2 };
+  const sourceJsonPath = join(root, 'dentisuite-store.json');
+  writeFileSync(sourceJsonPath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+
+  const duplicate = JSON.parse(JSON.stringify(store)) as typeof store;
+  duplicate.clinic.patients.push({ ...duplicate.clinic.patients[0]!, id: 'p1', firstName: 'Dup' });
+  const duplicateJsonPath = join(root, 'store-duplicate.json');
+  writeFileSync(duplicateJsonPath, `${JSON.stringify(duplicate)}\n`, 'utf8');
+
+  const v7 = JSON.parse(JSON.stringify(store)) as typeof store;
+  v7.clinic.schemaVersion = 7;
+  const v7JsonPath = join(root, 'store-v7.json');
+  writeFileSync(v7JsonPath, `${JSON.stringify(v7)}\n`, 'utf8');
+
+  const malformedJsonPath = join(root, 'store-malformed.json');
+  writeFileSync(malformedJsonPath, '{not-json', 'utf8');
+
+  return {
+    sourceJsonPath,
+    sourceMediaRoot: mediaRoot,
+    duplicateJsonPath,
+    v7JsonPath,
+    malformedJsonPath,
+    photoSize: PHOTO_BYTES.length,
+  };
+}
+
+/** Clean synthetic staging copy — no customer data, strict dry-run OK. */
+export function writeStagingApplyFixture(root: string): {
+  sourceJsonPath: string;
+  sourceMediaRoot: string;
+  photoSize: number;
+  dicomSize: number;
+  mismatchSize: number;
+} {
+  const mediaRoot = join(root, 'media');
+  mkdirSync(join(mediaRoot, 'p1'), { recursive: true });
+  mkdirSync(join(mediaRoot, 'p2'), { recursive: true });
+  writeFileSync(join(mediaRoot, 'p1', 'photo.png'), PHOTO_BYTES);
+  writeFileSync(join(mediaRoot, 'p1', 'scan.dcm'), DICOM_BYTES);
+  writeFileSync(join(mediaRoot, 'p2', 'mismatch.jpg'), MISMATCH_BYTES);
+
+  const clinic = {
+    schemaVersion: 8,
+    organizationId: 'must-be-ignored-from-json',
+    dentists: [
+      {
+        id: 'd1',
+        firstName: 'Amine',
+        lastName: 'El Amrani',
+        specialty: 'Omnipratique',
+        photo: '',
+        color: '#0e628e',
+      },
+      {
+        id: 'd2',
+        firstName: 'Lina',
+        lastName: 'Benali',
+        specialty: 'Ortho',
+        photo: '',
+        color: '#c45c26',
+      },
+    ],
+    patients: [
+      {
+        id: 'p1',
+        firstName: 'Sophie',
+        lastName: 'Martin',
+        phone: '0550000001',
+        age: 34,
+        address: 'Alger',
+        antecedents: 'Aucun',
+        hasAllergies: false,
+        dentistId: 'd1',
+        teeth: { '11': { number: '11', status: 'saine' } },
+        notes: 'linked-dentist',
+      },
+      {
+        id: 'p2',
+        firstName: 'Karim',
+        lastName: 'Hadj',
+        phone: '0550000002',
+        age: 41,
+        address: 'Oran',
+        antecedents: '',
+        hasAllergies: true,
+        teeth: { '21': { number: '21', status: 'carie' } },
+        notes: null,
+      },
+      {
+        id: 'p3',
+        firstName: 'Nadia',
+        lastName: 'Saidi',
+        phone: '0550000003',
+        age: 29,
+        address: 'Blida',
+        antecedents: '',
+        hasAllergies: false,
+        dentistId: 'd2',
+        teeth: {},
+        notes: null,
+      },
+    ],
+    appointments: [
+      {
+        id: 'a1',
+        date: '2026-08-19',
+        time: '09:00',
+        durationMin: 30,
+        patientId: 'p1',
+        patientName: 'Sophie Martin SNAPSHOT',
+        patientPhone: 'OLD-PHONE-1',
+        motif: 'Contrôle',
+        practitioner: 'Dr. Amine El Amrani',
+        dentistId: 'd1',
+        status: 'confirme',
+        category: 'controle',
+      },
+      {
+        id: 'a2',
+        date: '2026-08-20',
+        time: '10:15',
+        durationMin: 45,
+        patientId: 'p2',
+        patientName: 'Karim Hadj SNAPSHOT',
+        patientPhone: 'OLD-PHONE-2',
+        motif: 'Soin',
+        practitioner: 'Dr. Lina Benali',
+        dentistId: 'd2',
+        status: 'termine',
+        category: 'soin',
+      },
+      {
+        id: 'a3',
+        date: '2026-08-21',
+        time: '14:00',
+        durationMin: 20,
+        patientId: 'p3',
+        patientName: 'Nadia Saidi SNAPSHOT',
+        patientPhone: 'OLD-PHONE-3',
+        motif: 'Urgence',
+        practitioner: '',
+        dentistId: 'd-missing',
+        status: 'confirme',
+        category: 'urgence',
+      },
+    ],
+    sessions: [
+      {
+        id: 'ses1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        time: '09:30',
+        teeth: ['11'],
+        acts: 'Contrôle',
+        notes: 'RAS',
+        prescription: 'KEEP_FREE_TEXT_XYZ',
+      },
+      {
+        id: 'ses2',
+        patientId: 'p2',
+        date: '2026-08-20',
+        time: '10:30',
+        teeth: ['21'],
+        acts: 'Composite',
+        notes: 'OK',
+        prescription: '',
+      },
+      {
+        id: 'ses3',
+        patientId: 'p3',
+        date: '2026-08-21',
+        time: '14:20',
+        teeth: [],
+        acts: 'Urgence',
+        notes: '',
+        prescription: 'SESSION_TEXT_NOT_AN_RX',
+      },
+    ],
+    treatments: [
+      {
+        id: 't1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        tooth: '11',
+        act: 'Composite',
+        code: 'SO-20',
+        cost: 6000,
+        comment: 't1',
+        careStatus: 'fait',
+        paymentStatus: 'paye',
+        actId: 'act-s02',
+      },
+      {
+        id: 't2',
+        patientId: 'p2',
+        date: '2026-08-20',
+        tooth: '21',
+        act: 'Détartrage',
+        code: 'PR-10',
+        cost: 2500,
+        comment: '',
+        careStatus: 'fait',
+        paymentStatus: 'en_attente',
+      },
+      {
+        id: 't3',
+        patientId: 'p3',
+        date: '2026-08-21',
+        tooth: '16',
+        act: 'Extraction',
+        code: 'EX-01',
+        cost: 4000,
+        comment: '',
+        careStatus: 'a_faire',
+        paymentStatus: 'en_attente',
+      },
+    ],
+    prescriptions: [
+      {
+        id: 'rx1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin RX',
+        date: '2026-08-18',
+        title: 'Antalgique',
+        templateId: 'tpl-antalgique',
+        dentistId: 'd1',
+        dentistName: 'Dr. Amine El Amrani',
+        advice: 'Repos',
+        lines: [
+          {
+            id: 'rxl1',
+            drug: 'Paracétamol 1 g',
+            posology: '1 cp',
+            duration: '3 jours',
+            notes: '',
+          },
+        ],
+      },
+      {
+        id: 'rx2',
+        patientId: 'p2',
+        patientName: 'Karim Hadj RX',
+        date: '2026-08-20',
+        title: 'ATB',
+        templateId: null,
+        dentistId: 'd2',
+        dentistName: 'Dr. Lina Benali',
+        advice: '',
+        lines: [
+          {
+            id: 'rxl2a',
+            drug: 'Amoxicilline',
+            posology: '1 g',
+            duration: '7 jours',
+            notes: '',
+          },
+          {
+            id: 'rxl2b',
+            drug: 'Métronidazole',
+            posology: '500 mg',
+            duration: '7 jours',
+            notes: '',
+          },
+        ],
+      },
+      {
+        id: 'rx3',
+        patientId: 'p3',
+        patientName: 'Nadia Saidi RX',
+        date: '2026-08-21',
+        title: 'Bain de bouche',
+        dentistName: '',
+        advice: 'Après repas',
+        lines: [{ id: 'rxl3', drug: 'Eludril', posology: '2x/j', duration: '5 jours', notes: '' }],
+      },
+      {
+        id: 'rx-walkin',
+        patientName: 'Walk-in',
+        date: '2026-08-18',
+        title: 'Ordonnance',
+        advice: '',
+        dentistName: '',
+        lines: [{ id: 'rxl-w', drug: 'Ibuprofène', posology: '', duration: '', notes: '' }],
+      },
+      {
+        id: 'rx-empty',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        date: '2026-08-18',
+        title: 'Vide',
+        advice: '',
+        dentistName: '',
+        lines: [],
+      },
+    ],
+    invoices: [
+      {
+        id: 'i1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin INV',
+        label: 'Composite',
+        amount: 6000,
+        paid: true,
+        date: '2026-08-19',
+        treatmentId: 't1',
+      },
+      {
+        id: 'i2',
+        patientId: 'p2',
+        patientName: 'Karim Hadj INV',
+        label: 'Détartrage',
+        amount: 2500,
+        paid: false,
+        date: '2026-08-20',
+        treatmentId: 't2',
+      },
+      {
+        id: 'i3',
+        patientId: 'p3',
+        patientName: 'Nadia Saidi INV',
+        label: 'Orphan treatment link',
+        amount: 4000,
+        paid: false,
+        date: '2026-08-21',
+        treatmentId: 't-missing',
+      },
+      {
+        id: 'i-walkin',
+        patientName: 'Walk-in',
+        label: 'Consult',
+        amount: 2500,
+        paid: true,
+        date: '2026-08-19',
+      },
+      {
+        id: 'i-zero',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        label: 'Zero',
+        amount: 0,
+        paid: false,
+        date: '2026-08-19',
+      },
+    ],
+    stockItems: [
+      {
+        id: 'st1',
+        code: 'GANTS-M',
+        name: 'Gants M',
+        category: 'hygiene',
+        quantity: 40,
+        minQuantity: 10,
+        unitPrice: 850,
+        addedAt: '2026-01-10',
+        expiryDate: '',
+        supplier: 'MediStock',
+      },
+      {
+        id: 'st2',
+        code: 'RESINE',
+        name: 'Dents en résine',
+        category: 'prothese',
+        quantity: 5,
+        minQuantity: 2,
+        unitPrice: 14500,
+        addedAt: '2026-06-15',
+        expiryDate: '2027-06-15',
+        supplier: 'Céramilab',
+      },
+    ],
+    prostheses: [
+      {
+        id: 'pr-envoye',
+        type: 'Bridge',
+        tooth: '24-26',
+        patientId: 'p1',
+        patientName: 'Sophie Martin PROTH',
+        lab: 'Atlas',
+        sentAt: '2026-08-18',
+        expectedAt: '2026-09-02',
+        notes: '',
+        status: 'envoye',
+      },
+      {
+        id: 'pr-recu',
+        type: 'Couronne',
+        tooth: '16',
+        patientId: 'p3',
+        patientName: 'Nadia Saidi PROTH',
+        lab: 'Atlas',
+        sentAt: '2026-08-01',
+        expectedAt: '2026-08-20',
+        notes: '',
+        status: 'recu',
+      },
+    ],
+    mediaFiles: [
+      {
+        id: 'med-ok',
+        patientId: 'p1',
+        title: 'Radio',
+        kind: 'image',
+        mime: 'image/png',
+        originalName: 'photo.png',
+        filename: 'photo.png',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: PHOTO_BYTES.length,
+      },
+      {
+        id: 'med-dicom',
+        patientId: 'p1',
+        title: 'Scan',
+        kind: 'dicom',
+        mime: 'application/dicom',
+        originalName: 'scan.dcm',
+        filename: 'scan.dcm',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: DICOM_BYTES.length,
+      },
+      {
+        id: 'med-missing',
+        patientId: 'p1',
+        title: 'Missing',
+        kind: 'image',
+        mime: 'image/jpeg',
+        originalName: 'gone.jpg',
+        filename: 'gone.jpg',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: 100,
+      },
+      {
+        id: 'med-mismatch',
+        patientId: 'p2',
+        title: 'Mismatch',
+        kind: 'image',
+        mime: 'image/jpeg',
+        originalName: 'mismatch.jpg',
+        filename: 'mismatch.jpg',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: 99999,
+      },
+    ],
+    settings: {
+      name: 'Cabinet Staging Fixture',
+      address: 'Alger',
+      phone: '021',
+      email: 'staging@example.test',
+      logo: '',
+      adminPhoto: '',
+      dateFormat: 'long',
+      timeFormat: '24h',
+      timezone: 'Africa/Algiers',
+      locale: 'fr',
+    },
+    actCatalog: [{ id: 'act-s02', code: 'SO-20', name: 'Composite', category: 'soin', tariff: 6000, favorite: true, toothStatus: 'obturation' }],
+  };
+
+  const store = { clinic, zoomFactor: 1.2 };
+  const sourceJsonPath = join(root, 'dentisuite-store-COPY.json');
+  writeFileSync(sourceJsonPath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+
+  return {
+    sourceJsonPath,
+    sourceMediaRoot: mediaRoot,
+    photoSize: PHOTO_BYTES.length,
+    dicomSize: DICOM_BYTES.length,
+    mismatchSize: MISMATCH_BYTES.length,
+  };
+}
+
+/** Synthetic pilot copy: strict dry-run OK, walk-ins classified, no empty phone, no size mismatch. */
+export function writePilotReadyFixture(root: string): {
+  sourceJsonPath: string;
+  sourceMediaRoot: string;
+  photoSize: number;
+} {
+  const mediaRoot = join(root, 'media');
+  mkdirSync(join(mediaRoot, 'p1'), { recursive: true });
+  writeFileSync(join(mediaRoot, 'p1', 'photo.png'), PHOTO_BYTES);
+
+  const clinic = {
+    schemaVersion: 8,
+    organizationId: 'ignored-from-json',
+    dentists: [
+      {
+        id: 'd1',
+        firstName: 'Amine',
+        lastName: 'El Amrani',
+        specialty: 'Omnipratique',
+        photo: '',
+        color: '#0e628e',
+      },
+    ],
+    patients: [
+      {
+        id: 'p1',
+        firstName: 'Sophie',
+        lastName: 'Martin',
+        phone: '0550000001',
+        age: 34,
+        address: 'Alger',
+        antecedents: '',
+        hasAllergies: false,
+        dentistId: 'd1',
+        teeth: {},
+        notes: null,
+      },
+      {
+        id: 'p2',
+        firstName: 'Karim',
+        lastName: 'Hadj',
+        phone: '0550000002',
+        age: 41,
+        address: 'Oran',
+        antecedents: '',
+        hasAllergies: false,
+        dentistId: 'd1',
+        teeth: {},
+        notes: null,
+      },
+    ],
+    appointments: [
+      {
+        id: 'a1',
+        date: '2026-08-19',
+        time: '09:00',
+        durationMin: 30,
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        patientPhone: '0550000001',
+        motif: 'Consult',
+        practitioner: 'Dr Amine',
+        dentistId: 'd1',
+        status: 'confirme',
+        category: 'consultation',
+      },
+    ],
+    sessions: [
+      {
+        id: 'ses1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        time: '09:00',
+        teeth: [],
+        acts: 'Consult',
+        notes: '',
+        prescription: 'SESSION_FREE_TEXT',
+      },
+    ],
+    treatments: [
+      {
+        id: 't1',
+        patientId: 'p1',
+        date: '2026-08-19',
+        tooth: '11',
+        act: 'Composite',
+        code: 'SO-20',
+        cost: 6000,
+        comment: '',
+        careStatus: 'fait',
+        paymentStatus: 'paye',
+        actId: 'act-s02',
+      },
+    ],
+    prescriptions: [
+      {
+        id: 'rx1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        date: '2026-08-18',
+        title: 'Rx',
+        dentistId: 'd1',
+        dentistName: 'Dr Amine',
+        advice: '',
+        lines: [{ id: 'rxl1', drug: 'Paracetamol', posology: '1', duration: '3j', notes: '' }],
+      },
+      {
+        id: 'rx-walkin',
+        patientName: 'Walk-in',
+        date: '2026-08-18',
+        title: 'Walk-in Rx',
+        dentistName: '',
+        advice: '',
+        lines: [{ id: 'rxl-w', drug: 'Ibuprofene', posology: '', duration: '', notes: '' }],
+      },
+    ],
+    invoices: [
+      {
+        id: 'i1',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        label: 'Composite',
+        amount: 6000,
+        paid: true,
+        date: '2026-08-19',
+        treatmentId: 't1',
+      },
+      {
+        id: 'i-walkin',
+        patientName: 'Walk-in',
+        label: 'Consult',
+        amount: 2500,
+        paid: true,
+        date: '2026-08-19',
+      },
+    ],
+    stockItems: [
+      {
+        id: 'st1',
+        code: 'GANTS-M',
+        name: 'Gants M',
+        category: 'hygiene',
+        quantity: 10,
+        minQuantity: 2,
+        unitPrice: 850,
+        addedAt: '2026-01-10',
+        expiryDate: '',
+        supplier: 'Medi',
+      },
+    ],
+    prostheses: [
+      {
+        id: 'pr1',
+        type: 'Bridge',
+        tooth: '24',
+        patientId: 'p1',
+        patientName: 'Sophie Martin',
+        lab: 'Atlas',
+        sentAt: '2026-08-18',
+        expectedAt: '2026-09-02',
+        notes: '',
+        status: 'envoye',
+      },
+    ],
+    mediaFiles: [
+      {
+        id: 'med-ok',
+        patientId: 'p1',
+        title: 'Radio',
+        kind: 'image',
+        mime: 'image/png',
+        originalName: 'photo.png',
+        filename: 'photo.png',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        size: PHOTO_BYTES.length,
+      },
+    ],
+    settings: {
+      name: 'Pilot Cabinet',
+      address: 'Alger',
+      phone: '021',
+      email: 'pilot@example.test',
+      logo: '',
+      adminPhoto: '',
+      dateFormat: 'long',
+      timeFormat: '24h',
+      timezone: 'Africa/Algiers',
+      locale: 'fr',
+    },
+    actCatalog: [
+      {
+        id: 'act-s02',
+        code: 'SO-20',
+        name: 'Composite',
+        category: 'soin',
+        tariff: 6000,
+        favorite: true,
+        toothStatus: 'obturation',
+      },
+      {
+        id: 'act-unused',
+        code: 'PR-99',
+        name: 'Unused',
+        category: 'prothese',
+        tariff: 1,
+        favorite: false,
+        toothStatus: 'saine',
+      },
+    ],
+  };
+
+  const store = { clinic, zoomFactor: 1 };
+  const sourceJsonPath = join(root, 'dentisuite-store-COPY.json');
+  writeFileSync(sourceJsonPath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+  return { sourceJsonPath, sourceMediaRoot: mediaRoot, photoSize: PHOTO_BYTES.length };
+}

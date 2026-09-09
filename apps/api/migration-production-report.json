@@ -1,0 +1,261 @@
+{
+  "metadata": {
+    "mode": "PRODUCTION_PREFLIGHT",
+    "environment": "PRODUCTION",
+    "executionEnabled": false,
+    "targetOrganizationId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    "databaseIdentity": "dentisuite-prod-db-label",
+    "storageIdentity": "r2:dentisuite-prod-media-label",
+    "storageProvider": "r2",
+    "expectedMediaPrefix": "org/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/patients/",
+    "sourceJsonHash": "7926d246abb7a89fbad9aabfb94413c33ed524a7b174559692d5683d825f01ed",
+    "mediaManifestHash": "d1f89d95904807d47535a0bba9333923b41736de851880dde2eccf4c123cada0",
+    "mediaFileCount": 1,
+    "backupTimestamp": "2026-09-03T00:00:00.000Z",
+    "intendedState": "READY_FOR_APPROVAL",
+    "migrationState": "READY_FOR_APPROVAL",
+    "organizationChecked": true,
+    "startedAt": "2026-09-03T01:08:56.795Z",
+    "finishedAt": "2026-09-03T01:08:56.814Z"
+  },
+  "operatorConfirmation": {
+    "migrationMode": "APPLY",
+    "migrationConfirm": true,
+    "migrationProductionApproval": true,
+    "migrationEnv": "PRODUCTION"
+  },
+  "dryRunOk": true,
+  "sourceCounts": {
+    "dentists": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "patients": {
+      "source": 2,
+      "valid": 2,
+      "skipped": 0,
+      "errors": 0
+    },
+    "appointments": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "sessions": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "treatments": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "prescriptions": {
+      "source": 2,
+      "valid": 1,
+      "skipped": 1,
+      "errors": 0
+    },
+    "prescriptionLines": {
+      "source": 2,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "invoices": {
+      "source": 2,
+      "valid": 1,
+      "skipped": 1,
+      "errors": 0
+    },
+    "stockItems": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "prostheses": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    },
+    "mediaFiles": {
+      "source": 1,
+      "valid": 1,
+      "skipped": 0,
+      "errors": 0
+    }
+  },
+  "plannedCounts": {
+    "dentist": 1,
+    "patient": 2,
+    "appointment": 1,
+    "clinicalSession": 1,
+    "treatment": 1,
+    "prescription": 1,
+    "prescriptionItem": 1,
+    "invoice": 1,
+    "stockItem": 1,
+    "prosthesis": 1,
+    "patientMedia": 1
+  },
+  "insertedCounts": {
+    "dentist": 0,
+    "patient": 0,
+    "appointment": 0,
+    "clinicalSession": 0,
+    "treatment": 0,
+    "prescription": 0,
+    "prescriptionItem": 0,
+    "invoice": 0,
+    "stockItem": 0,
+    "prosthesis": 0,
+    "patientMedia": 0
+  },
+  "skipped": [
+    {
+      "severity": "SKIPPED",
+      "code": "WALK_IN_PRESCRIPTION",
+      "entity": "prescription",
+      "message": "Walk-in prescription without patientId is skipped",
+      "localId": "rx-walkin"
+    },
+    {
+      "severity": "SKIPPED",
+      "code": "WALK_IN_INVOICE",
+      "entity": "invoice",
+      "message": "Walk-in invoice without patientId is skipped",
+      "localId": "i-walkin"
+    }
+  ],
+  "warnings": [
+    {
+      "severity": "WARNING",
+      "code": "ORGANIZATION_ID_IN_SOURCE_IGNORED",
+      "entity": "clinic",
+      "message": "organizationId in JSON is ignored; target comes from trusted migration config only"
+    }
+  ],
+  "errors": [],
+  "mappingStatistics": {
+    "dentist": 1,
+    "patient": 2,
+    "appointment": 1,
+    "session": 1,
+    "treatment": 1,
+    "prescription": 2,
+    "prescriptionLine": 2,
+    "invoice": 2,
+    "stock": 1,
+    "prosthesis": 1,
+    "media": 1
+  },
+  "mediaStatistics": {
+    "source": 1,
+    "planned": 1,
+    "missing": 0
+  },
+  "operatorReview": [
+    {
+      "category": "walk-in prescriptions",
+      "policy": "SKIP — no Prescription row (Cloud requires patientId)",
+      "count": 1,
+      "action": "SKIP"
+    },
+    {
+      "category": "walk-in invoices",
+      "policy": "SKIP — no Invoice row (Cloud requires patientId)",
+      "count": 1,
+      "action": "SKIP"
+    },
+    {
+      "category": "empty phone",
+      "policy": "ERROR strict / SKIP non-strict — never invent a phone",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "zero amount invoice",
+      "policy": "SKIP amount <= 0",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "float treatment cost",
+      "policy": "ERROR in strict — no silent rounding",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "missing dentist",
+      "policy": "dentistId null + WARNING — UUID not invented",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "unmapped treatment",
+      "policy": "Invoice.treatmentId null + WARNING",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "missing media",
+      "policy": "SKIP — no READY metadata",
+      "count": 0,
+      "action": "NONE"
+    },
+    {
+      "category": "deferred settings",
+      "policy": "DEFERRED — not copied onto Organization",
+      "count": 1,
+      "action": "DEFERRED"
+    },
+    {
+      "category": "deferred act catalog",
+      "policy": "DEFERRED — Treatment.act/code/actId preserved as opaque values",
+      "count": 1,
+      "action": "DEFERRED"
+    }
+  ],
+  "openProductDecisions": [
+    {
+      "id": "walk-in-invoice",
+      "title": "Walk-in invoice policy",
+      "currentPolicy": "SKIP (Cloud Invoice requires patientId)",
+      "status": "UNRESOLVED"
+    },
+    {
+      "id": "walk-in-prescription",
+      "title": "Walk-in prescription policy",
+      "currentPolicy": "SKIP (Cloud Prescription requires patientId)",
+      "status": "UNRESOLVED"
+    },
+    {
+      "id": "empty-phone",
+      "title": "Empty phone policy",
+      "currentPolicy": "ERROR in strict mode; never invent a phone",
+      "status": "UNRESOLVED"
+    },
+    {
+      "id": "settings-migration",
+      "title": "ClinicSettings migration",
+      "currentPolicy": "DEFERRED. Optional settings.name → Organization.name only if --copy-organization-name (default off, no overwrite)",
+      "status": "UNRESOLVED"
+    },
+    {
+      "id": "act-catalog-migration",
+      "title": "ActCatalog migration",
+      "currentPolicy": "DEFERRED. Treatment.act / code / actId preserved as opaque values; catalog rows are not imported",
+      "status": "UNRESOLVED"
+    }
+  ],
+  "verification": null,
+  "ok": true
+}

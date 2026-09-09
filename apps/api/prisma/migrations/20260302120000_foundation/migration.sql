@@ -1,0 +1,3 @@
+-- Phase 1 foundation migration.
+-- No business tables. Establishes Prisma migrate history only.
+-- Clinical / auth / multi-tenant models are intentionally deferred.

@@ -1,0 +1,63 @@
+node_modules
+dist
+dist-electron
+out
+release
+.DS_Store
+Thumbs.db
+*.log
+.vite
+*.tsbuildinfo
+
+# Environment / secrets — never commit
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+!apps/api/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa
+id_rsa.*
+credentials.json
+**/secrets/**
+**/*secret*
+!**/*.example
+
+# API build / local data
+apps/api/dist
+apps/api/coverage
+apps/api/.tmp-pg
+apps/api/tmp
+apps/api/tmp/
+**/*staging-6c-source*
+
+# Prisma generated (regenerate via prisma generate)
+apps/api/node_modules/.prisma
+
+# Electron / installer artifacts
+*.exe
+*.exe.blockmap
+*.dmg
+*.AppImage
+*.snap
+win-unpacked
+*.nsis.7z
+
+# Local temp / Electron smoke userdata — never commit
+tmp/
+**/userdata*/
+**/*with-creds*
+**/bisect-with-creds*
+
+# IDE / OS
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+.cursor/

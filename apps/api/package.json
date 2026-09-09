@@ -1,0 +1,51 @@
+{
+  "name": "@dentisuite/api",
+  "version": "3.1.2",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "tsx scripts/seed-permissions.ts",
+    "migrate:dry-run": "tsx src/migration/cli.ts dry-run",
+    "migrate:validate": "tsx src/migration/cli.ts validate",
+    "migrate:plan": "tsx src/migration/cli.ts plan",
+    "migrate:apply": "tsx src/migration/cli.ts apply",
+    "migrate:rollback": "tsx src/migration/cli.ts rollback",
+    "migrate:verify": "tsx src/migration/cli.ts verify",
+    "migrate:production-preflight": "tsx src/migration/cli.ts production-preflight",
+    "migrate:pilot-readiness": "tsx src/migration/cli.ts pilot-readiness"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.787.0",
+    "@aws-sdk/s3-request-presigner": "^3.787.0",
+    "@hono/node-server": "^1.14.4",
+    "@node-rs/argon2": "^2.2.0",
+    "@prisma/client": "^6.9.0",
+    "dotenv": "^16.5.0",
+    "hono": "^4.7.11",
+    "pino": "^9.7.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^22.15.32",
+    "pglite-prisma-adapter": "^0.6.1",
+    "prisma": "^6.9.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,545 @@
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+.prescription-pdf,
+.prescription-pdf * {
+  font-family: 'Inter';
+  font-weight: 400;
+  font-style: normal;
+  font-synthesis: none;
+}
+
+.prescription-pdf .normal-text {
+  font-family: 'Inter';
+  font-weight: 400;
+  font-style: normal;
+  font-synthesis: none;
+}
+
+html,
+body,
+.sheet,
+h1,
+h2,
+h3,
+p,
+div,
+span,
+strong,
+em,
+b,
+i,
+article,
+header,
+footer,
+section,
+table,
+thead,
+tbody,
+tr,
+td,
+th,
+ul,
+ol,
+li,
+a,
+small,
+label {
+  font-family: 'Inter' !important;
+  font-style: normal;
+}
+
+html,
+body,
+.sheet {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 400 !important;
+  font-synthesis: none !important;
+  font-variant-ligatures: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+html,
+body {
+  width: 210mm;
+  min-height: 297mm;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: 'Inter' !important;
+  font-style: normal !important;
+  font-synthesis: none !important;
+  font-variant-ligatures: none !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+*::before,
+*::after {
+  font-family: 'Inter' !important;
+  font-style: normal !important;
+}
+
+p,
+span,
+div,
+article,
+section,
+table,
+thead,
+tbody,
+tr,
+td,
+th,
+ul,
+ol,
+li,
+small,
+label,
+.clinic-meta,
+.subtitle,
+.med-body,
+.med-posology,
+.med-note,
+.empty,
+.advice p,
+.legal,
+.sign .line {
+  font-weight: 400 !important;
+}
+
+.sheet {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 20mm;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+.watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.watermark img {
+  width: 30%;
+  max-width: 30%;
+  height: auto;
+  max-height: 42%;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 14px;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+}
+
+.sheet > *:not(.watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 4px solid #0e628e;
+}
+
+.brand {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+
+.logo,
+.rx-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.rx-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0e628e;
+  color: #fff;
+  font-style: normal;
+  font-family: 'Inter Bold' !important;
+  font-weight: 400 !important;
+  font-size: 32px;
+}
+
+.clinic-name,
+h1 {
+  font-family: 'Inter Bold' !important;
+  font-weight: 400 !important;
+}
+
+.doc-title h2,
+.med-n,
+.med-name,
+.med-duration,
+.sign .who,
+.kicker,
+.meta-label,
+.section-label,
+.advice strong,
+h2,
+h3 {
+  font-family: 'Inter SemiBold' !important;
+  font-weight: 400 !important;
+}
+
+.meta-value {
+  font-family: 'Inter Medium' !important;
+  font-weight: 400 !important;
+}
+
+.clinic-name {
+  margin: 0 0 6px;
+  font-size: 26px;
+  line-height: 1.15;
+  color: #0b3d5c;
+}
+
+.clinic-meta {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.doc-title {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.doc-title .kicker {
+  margin: 0 0 4px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #0e628e;
+}
+
+.doc-title h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  color: #0b3d5c;
+}
+
+.doc-title .subtitle {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: #475569;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 22px 0 8px;
+}
+
+.meta-card {
+  padding: 14px 16px;
+  background: #f1f7fb;
+  border: 1px solid #d5e8f2;
+  border-radius: 10px;
+}
+
+.meta-card.right {
+  text-align: right;
+}
+
+.meta-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0e628e;
+}
+
+.meta-value {
+  margin: 0;
+  font-size: 18px;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.section-label {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.meds {
+  flex: 1;
+  border-top: 2px solid #0e628e;
+}
+
+.med {
+  display: grid;
+  grid-template-columns: 42px 1fr 140px;
+  gap: 12px;
+  padding: 16px 4px;
+  border-bottom: 1px solid #cbd5e1;
+  align-items: start;
+}
+
+.med-n {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #0e628e;
+  color: #fff;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.med-name {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #0b3d5c;
+}
+
+.med-posology {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #1e293b;
+}
+
+.med-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.med-duration {
+  text-align: right;
+  font-size: 14px;
+  color: #0e628e;
+  padding-top: 6px;
+}
+
+.empty {
+  padding: 20px 4px;
+  font-size: 15px;
+  color: #64748b;
+}
+
+.advice {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1.5px solid #94a3b8;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.advice strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0e628e;
+}
+
+.advice p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #1e293b;
+}
+
+.bottom {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+}
+
+.legal {
+  font-size: 12px;
+  color: #64748b;
+  max-width: 55%;
+  line-height: 1.4;
+}
+
+.sign {
+  width: 240px;
+  text-align: center;
+}
+
+.sign .who {
+  margin: 0;
+  font-size: 16px;
+  color: #0b3d5c;
+}
+
+.sign .line {
+  margin-top: 64px;
+  border-top: 1.5px solid #334155;
+  padding-top: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+@media print {
+  *,
+  *::before,
+  *::after,
+  html,
+  body,
+  .sheet,
+  h1,
+  h2,
+  h3,
+  p,
+  div,
+  span,
+  strong,
+  em,
+  b,
+  i,
+  article,
+  header,
+  footer,
+  section,
+  table,
+  thead,
+  tbody,
+  tr,
+  td,
+  th,
+  ul,
+  ol,
+  li,
+  a,
+  small,
+  label {
+    font-family: 'Inter' !important;
+    font-style: normal !important;
+    font-synthesis: none !important;
+    font-variant-ligatures: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body,
+  .sheet {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    background: #fff !important;
+    font-weight: 400 !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: geometricPrecision !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  p,
+  span,
+  div,
+  article,
+  section,
+  table,
+  thead,
+  tbody,
+  tr,
+  td,
+  th,
+  ul,
+  ol,
+  li,
+  small,
+  label,
+  .clinic-meta,
+  .subtitle,
+  .med-body,
+  .med-posology,
+  .med-note,
+  .empty,
+  .advice p,
+  .legal,
+  .sign .line,
+  .normal-text {
+    font-family: 'Inter' !important;
+    font-weight: 400 !important;
+  }
+
+  h1,
+  .clinic-name,
+  .rx-mark {
+    font-family: 'Inter Bold' !important;
+    font-weight: 400 !important;
+  }
+
+  h2,
+  h3,
+  .doc-title h2,
+  .med-n,
+  .med-name,
+  .med-duration,
+  .sign .who,
+  .kicker,
+  .meta-label,
+  .section-label,
+  .advice strong {
+    font-family: 'Inter SemiBold' !important;
+    font-weight: 400 !important;
+  }
+
+  .meta-value {
+    font-family: 'Inter Medium' !important;
+    font-weight: 400 !important;
+  }
+
+  .watermark {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .watermark img {
+    opacity: 0.05 !important;
+    mix-blend-mode: multiply !important;
+  }
+}
