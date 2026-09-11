@@ -370,6 +370,40 @@ export interface DentiSuiteAPI {
     | { ok: true; status: number; data: unknown; state?: string }
     | { ok: false; code: string; message: string; status: number; state?: string }
   >
+  /** Auto-update (electron-updater). */
+  updateGetStatus?: () => Promise<{
+    status: string
+    currentVersion: string
+    availableVersion: string | null
+    downloadPercent?: number
+    error?: string | null
+    packaged?: boolean
+  }>
+  updateCheck?: (options?: { silent?: boolean }) => Promise<{
+    status: string
+    currentVersion: string
+    availableVersion: string | null
+    downloadPercent?: number
+    error?: string | null
+    packaged?: boolean
+  }>
+  updateDownload?: () => Promise<{
+    status: string
+    currentVersion: string
+    availableVersion: string | null
+    downloadPercent?: number
+    error?: string | null
+  }>
+  updateInstall?: () => Promise<{ ok: boolean; error?: string }>
+  onUpdateStatus?: (
+    handler: (payload: {
+      status: string
+      currentVersion: string
+      availableVersion: string | null
+      downloadPercent?: number
+      error?: string | null
+    }) => void,
+  ) => () => void
 }
 
 export type PatientDraft = Omit<Patient, 'id' | 'teeth'>

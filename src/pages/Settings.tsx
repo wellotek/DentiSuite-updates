@@ -11,6 +11,7 @@ import {
   useT,
 } from '../i18n'
 import type { ClinicSettings, DateFormat, Locale, TimeFormat } from '../types'
+import { UpdateNotifier } from '../components/UpdateNotifier'
 
 export function Settings() {
   const t = useT()
@@ -165,6 +166,8 @@ export function Settings() {
           ))}
         </div>
       </section>
+
+      <UpdateNotifier mode="settings" />
     </div>
   )
 }

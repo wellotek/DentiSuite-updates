@@ -19,6 +19,7 @@ import { CloudTeamPage } from './pages/cloud/CloudTeamPage'
 import { CloudDocumentsPage } from './pages/cloud/CloudDocumentsPage'
 import { useT } from './i18n'
 import { readCloudConfig } from './cloud/bridge'
+import { UpdateNotifier } from './components/UpdateNotifier'
 
 /**
  * CLOUD product routes: full Legacy UI under Cloud auth shell.
@@ -113,6 +114,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <UpdateNotifier mode="prompt" />
       {appMode === 'CLOUD' ? (
         <CloudRoutes />
       ) : !licenseActivated ? (

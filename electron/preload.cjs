@@ -28,4 +28,17 @@ contextBridge.exposeInMainWorld('dentisuite', {
   cloudPatientsCreate: (input) => ipcRenderer.invoke('cloud:patients:create', input || {}),
   // Phase 8C — Patients Cloud update (PATCH only via this channel)
   cloudPatientsUpdate: (input) => ipcRenderer.invoke('cloud:patients:update', input || {}),
+  // Auto-update (electron-updater → wellotek/DentiSuite-updates)
+  updateGetStatus: () => ipcRenderer.invoke('update:getStatus'),
+  updateCheck: (options) => ipcRenderer.invoke('update:check', options || {}),
+  updateDownload: () => ipcRenderer.invoke('update:download'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (handler) => {
+    const listener = (_event, payload) => handler(payload)
+    ipcRenderer.on('update:status', listener)
+    ipcRenderer.on('update:available', () => undefined)
+    return () => {
+      ipcRenderer.removeListener('update:status', listener)
+    }
+  },
 })

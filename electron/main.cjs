@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron')
 const licenseService = require('./license/service.cjs')
 const { registerCloudIpc } = require('./cloud/ipc.cjs')
+const { registerUpdateIpc, scheduleSilentCheck } = require('./updater.cjs')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
@@ -305,6 +306,9 @@ app.whenReady().then(() => {
 
   // Cloud auth IPC (token stays in main / safeStorage). Active when APP_MODE=CLOUD.
   registerCloudIpc()
+  // Desktop auto-update (packaged builds → public GitHub updates repo).
+  registerUpdateIpc()
+  scheduleSilentCheck(8000)
 
   ipcMain.handle('clinic:get', () => {
     return readStore().clinic
