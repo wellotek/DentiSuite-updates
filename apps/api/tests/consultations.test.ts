@@ -519,7 +519,7 @@ describe('consultation / treatment cloud API (Phase 5C)', () => {
     ).toBe(403);
   });
 
-  it('patient hard-delete cascades clinical rows (local-equivalent)', async () => {
+  it('patient purge cascades clinical rows (local-equivalent)', async () => {
     const orgA = await bootstrapOrg('clin-cascade@example.com');
     const patient = await createPatient(orgA.app, orgA.user.token);
 
@@ -545,8 +545,26 @@ describe('consultation / treatment cloud API (Phase 5C)', () => {
 
     expect(
       (
+        await orgA.app.request(`/patients/${patient.id}/purge`, {
+          method: 'POST',
+          headers: authHeader(orgA.user.token),
+        })
+      ).status,
+    ).toBe(409);
+
+    expect(
+      (
         await orgA.app.request(`/patients/${patient.id}`, {
           method: 'DELETE',
+          headers: authHeader(orgA.user.token),
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await orgA.app.request(`/patients/${patient.id}/purge`, {
+          method: 'POST',
           headers: authHeader(orgA.user.token),
         })
       ).status,

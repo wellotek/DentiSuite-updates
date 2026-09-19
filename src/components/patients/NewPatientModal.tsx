@@ -1,9 +1,10 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useMemo, useState } from 'react'
 import type { Patient, PatientDraft } from '../../types'
 import { useAppStore } from '../../store/useAppStore'
 import { DentistSelect } from '../dentists/DentistSelect'
 import { useT } from '../../i18n'
 import { isCloudClinicMode } from '../../cloud/cloudClinicMode'
+import { computeAgeFromBirthDate } from '../../lib/age'
 
 interface NewPatientModalProps {
   initial?: Patient | null
@@ -17,6 +18,7 @@ export function NewPatientModal({ initial, onClose, onSave }: NewPatientModalPro
   const [form, setForm] = useState({
     lastName: initial?.lastName ?? '',
     firstName: initial?.firstName ?? '',
+    birthDate: initial?.birthDate ?? '',
     age: initial ? String(initial.age) : '',
     phone: initial?.phone ?? '',
     address: initial?.address ?? '',
@@ -25,13 +27,25 @@ export function NewPatientModal({ initial, onClose, onSave }: NewPatientModalPro
     dentistId: initial?.dentistId ?? '',
   })
 
+  const computedAge = useMemo(
+    () => computeAgeFromBirthDate(form.birthDate || null),
+    [form.birthDate],
+  )
+  const ageDisplay =
+    computedAge !== null ? String(computedAge) : form.age
+
   function submit(e: FormEvent) {
     e.preventDefault()
     const antecedents = form.antecedents.trim() || 'Aucun'
+    const birthDate = form.birthDate.trim() || null
+    const age =
+      computeAgeFromBirthDate(birthDate) ??
+      (Number(form.age) || 0)
     onSave({
       lastName: form.lastName.trim(),
       firstName: form.firstName.trim(),
-      age: Number(form.age) || 0,
+      age,
+      birthDate,
       phone: form.phone.trim(),
       address: form.address.trim(),
       antecedents,
@@ -53,7 +67,34 @@ export function NewPatientModal({ initial, onClose, onSave }: NewPatientModalPro
         <div className="mt-5 grid grid-cols-2 gap-3">
           <Field label={t('form.lastName')} value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} />
           <Field label={t('form.firstName')} value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} />
-          <Field label={t('patients.age')} type="number" value={form.age} onChange={(v) => setForm({ ...form, age: v })} />
+          <Field
+            label={t('patients.birthDate')}
+            type="date"
+            value={form.birthDate}
+            onChange={(v) => setForm({ ...form, birthDate: v })}
+            required={false}
+          />
+          <label className="block text-xs font-medium text-slate-600">
+            {t('patients.age')}
+            <input
+              type="number"
+              value={ageDisplay}
+              onChange={(e) => {
+                if (form.birthDate) return
+                setForm({ ...form, age: e.target.value })
+              }}
+              readOnly={Boolean(form.birthDate)}
+              required={!form.birthDate}
+              min={0}
+              max={150}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400 read-only:bg-slate-50"
+            />
+            {form.birthDate ? (
+              <span className="mt-0.5 block text-[11px] font-normal text-slate-400">
+                Calculé automatiquement depuis la date de naissance
+              </span>
+            ) : null}
+          </label>
           <Field label={t('patients.phone')} value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
           <div className="col-span-2">
             <Field

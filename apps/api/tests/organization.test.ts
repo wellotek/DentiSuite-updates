@@ -49,17 +49,20 @@ describe('organization + membership foundation', () => {
     const body = (await res.json()) as {
       organization: { id: string; name: string };
       membership: { role: string; userId: string; organizationId: string };
-      licenseBinding: null;
+      licenseBinding: { licenseId: string; status: string } | null;
     };
 
     expect(body.organization.name).toBe('Cabinet Alpha');
     expect(body.membership.role).toBe('ADMIN');
     expect(body.membership.userId).toBe(userId);
     expect(body.membership.organizationId).toBe(body.organization.id);
-    expect(body.licenseBinding).toBeNull();
+    // Open-create (dev/test) attaches synthetic DEV-* binding; client licenseId ignored.
+    expect(body.licenseBinding).not.toBeNull();
+    expect(body.licenseBinding?.licenseId.startsWith('DEV-')).toBe(true);
+    expect(body.licenseBinding?.licenseId).not.toBe('forged-license');
 
     const bindings = await prisma.licenseBinding.count();
-    expect(bindings).toBe(0);
+    expect(bindings).toBe(1);
   });
 
   it('unauthenticated user cannot create organization', async () => {
@@ -319,20 +322,21 @@ describe('organization + membership foundation', () => {
       }),
     });
     expect(created.status).toBe(201);
-    expect(await prisma.licenseBinding.count()).toBe(0);
+    const createdBody = (await created.json()) as {
+      organization: { id: string };
+      licenseBinding: { licenseId: string; maxUsers: number } | null;
+    };
+    expect(createdBody.licenseBinding?.licenseId.startsWith('DEV-')).toBe(true);
+    expect(createdBody.licenseBinding?.maxUsers).toBe(25);
+    expect(createdBody.licenseBinding?.licenseId).not.toBe('client-forged');
+    expect(await prisma.licenseBinding.count()).toBe(1);
 
-    const org = await prisma.organization.findFirst();
-    const binding = await organizationService.createLicenseBinding(org!.id, {
-      licenseId: 'LIC-TEST-001',
-      maxUsers: 3,
-      status: 'ACTIVE',
-    });
-    expect(binding.maxUsers).toBe(3);
-
+    // Second binding on same org is refused
     await expect(
-      organizationService.createLicenseBinding(org!.id, {
-        licenseId: 'LIC-TEST-002',
-        maxUsers: 5,
+      organizationService.createLicenseBinding(createdBody.organization.id, {
+        licenseId: 'LIC-TEST-0001',
+        maxUsers: 3,
+        status: 'ACTIVE',
       }),
     ).rejects.toMatchObject({ code: 'LICENSE_BINDING_CONFLICT' });
 
@@ -344,9 +348,10 @@ describe('organization + membership foundation', () => {
     });
     const otherBody = (await otherOrg.json()) as { organization: { id: string } };
 
+    // Cannot reuse another organization's licenseId
     await expect(
       organizationService.createLicenseBinding(otherBody.organization.id, {
-        licenseId: 'LIC-TEST-001',
+        licenseId: createdBody.licenseBinding!.licenseId,
         maxUsers: 2,
       }),
     ).rejects.toMatchObject({ code: 'LICENSE_BINDING_CONFLICT' });

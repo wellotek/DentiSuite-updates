@@ -72,6 +72,16 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
     windowMs: deps.config.authRateLimitWindowMs,
     max: deps.config.authRateLimitMax,
     keyPrefix: 'auth',
+    trustProxy: deps.config.trustProxy,
+  });
+
+  /** Stricter bucket for license bootstrap / onboarding enumeration. */
+  const licenseRateLimit = createRateLimitMiddleware({
+    store: deps.rateLimitStore,
+    windowMs: deps.config.authRateLimitWindowMs,
+    max: Math.min(10, deps.config.authRateLimitMax),
+    keyPrefix: 'license',
+    trustProxy: deps.config.trustProxy,
   });
 
   auth.post('/register', rateLimit, async (c) => {
@@ -100,7 +110,7 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
    * Commercial onboarding — public, rate-limited.
    * Creates Organization + ADMIN User + Membership + LicenseBinding + Dentist, then session.
    */
-  auth.post('/bootstrap-organization', rateLimit, async (c) => {
+  auth.post('/bootstrap-organization', licenseRateLimit, async (c) => {
     const body = parseJson(
       createBootstrapOrganizationSchema(deps.config.passwordMinLength),
       await c.req.json().catch(() => ({})),
@@ -121,7 +131,7 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
   });
 
   /** Public: whether a license key already has a clinic (decide LOGIN vs REGISTER UI). */
-  auth.get('/onboarding-status', rateLimit, async (c) => {
+  auth.get('/onboarding-status', licenseRateLimit, async (c) => {
     const parsed = onboardingStatusQuerySchema.safeParse({
       licenseKey: c.req.query('licenseKey') ?? '',
     });

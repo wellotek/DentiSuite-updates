@@ -5,6 +5,7 @@ import interLatin400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?
 import interLatin500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?inline'
 import interLatin600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?inline'
 import interLatin700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?inline'
+import { escapeHtml, printHtmlViaIframe } from '../print'
 
 const PRINT_FONT = "'Inter'"
 const PRINT_TEXT =
@@ -16,14 +17,6 @@ const PRINT_FACES = [
   { family: 'Inter SemiBold', data: interLatin600 },
   { family: 'Inter Bold', data: interLatin700 },
 ] as const
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 function asFontDataUri(data: string) {
   if (data.startsWith('data:')) return data.replace(/^data:[^;]+/, 'data:font/woff2')
@@ -102,64 +95,37 @@ async function registerPrintFonts(doc: Document) {
 export async function printPrescription(rx: Prescription, settings: ClinicSettings, locale = 'fr-DZ') {
   console.log('[PDF] Button clicked')
   console.log('[PDF] Starting print pipeline')
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.setAttribute('title', 'Aperçu d’impression')
-  iframe.style.cssText =
-    'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:1;visibility:visible;background:#fff;'
-  document.body.appendChild(iframe)
-
   try {
     console.log('[PDF] Creating print document')
     const html = buildPrescriptionHtml(rx, settings, locale)
     console.log('[PDF] Injecting HTML/CSS')
-    await new Promise<void>((resolve) => {
-      let settled = false
-      const done = (reason: string) => {
-        if (settled) return
-        settled = true
-        console.log('[PDF] iframe ready via', reason)
-        resolve()
-      }
-      const hasSheet = () => Boolean(iframe.contentDocument?.querySelector('.sheet'))
-      iframe.onload = () => {
-        if (hasSheet()) done('onload')
-        else console.log('[PDF] iframe onload ignored (document empty)')
-      }
-      iframe.srcdoc = html
-      if (hasSheet()) done('srcdoc-sync')
-      window.setTimeout(() => done('timeout-800ms'), 800)
+    await printHtmlViaIframe({
+      html,
+      mode: 'a4-preview',
+      title: 'Aperçu d’impression',
+      onReady: async (doc) => {
+        console.log('[PDF] iframe loaded')
+        await registerPrintFonts(doc)
+        console.log('[PDF] Calling print')
+      },
     })
-
-    const doc = iframe.contentDocument
-    const win = iframe.contentWindow
-    if (!doc || !win) {
-      throw new Error('iframe.contentDocument / contentWindow unavailable')
-    }
-    console.log('[PDF] iframe loaded')
-
-    await registerPrintFonts(doc)
-
-    let cleaned = false
-    const cleanup = () => {
-      if (cleaned) return
-      cleaned = true
-      iframe.remove()
-    }
-    win.addEventListener('afterprint', cleanup, { once: true })
-    window.setTimeout(cleanup, 60_000)
-
-    console.log('[PDF] Calling print')
-    win.focus()
-    win.print()
     console.log('[PDF] Print completed')
   } catch (error) {
     logPdfError('Print failed', error)
-    iframe.remove()
   }
 }
 
-function buildPrescriptionHtml(rx: Prescription, settings: ClinicSettings, locale: string) {
+/** Same HTML as print/PDF — for on-screen preview without opening the print dialog. */
+export function prescriptionPreviewHtml(
+  rx: Prescription,
+  settings: ClinicSettings,
+  locale = 'fr-DZ',
+) {
+  return buildPrescriptionHtml(rx, settings, locale)
+}
+
+/** Exported for structure tests — visual markup preserved from legacy engine. */
+export function buildPrescriptionHtml(rx: Prescription, settings: ClinicSettings, locale: string) {
   const date = parseISODate(rx.date).toLocaleDateString(locale, {
     weekday: 'long',
     day: 'numeric',
@@ -221,6 +187,18 @@ function buildPrescriptionHtml(rx: Prescription, settings: ClinicSettings, local
       <div class="meta-card">
         <p class="meta-label">Patient</p>
         <p class="meta-value">${escapeHtml(rx.patientName || '—')}</p>
+        ${
+          rx.patientBirthDate
+            ? `<p class="meta-sub normal-text">Né(e) le : ${escapeHtml(
+                rx.patientBirthDate.split('-').reverse().join('/'),
+              )}</p>`
+            : ''
+        }
+        ${
+          rx.patientAge != null && Number.isFinite(rx.patientAge)
+            ? `<p class="meta-sub normal-text">Âge : ${escapeHtml(String(rx.patientAge))} ans</p>`
+            : ''
+        }
       </div>
       <div class="meta-card right">
         <p class="meta-label">Date</p>

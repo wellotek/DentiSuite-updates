@@ -1,57 +1,35 @@
 import type { ClinicSettings, StockItem } from '../types'
 import { formatDA } from './money'
 import { formatStockDate, stockAlert, stockAlertMeta, stockCategoryLabel, stockValue } from './stock'
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
+import {
+  a4ReportBaseCss,
+  clinicLogoHtml,
+  escapeHtml,
+  formatGeneratedLongFr,
+  printHtmlViaIframe,
+  wrapA4Document,
+} from '../print'
 
 export function printStockReport(items: StockItem[], settings: ClinicSettings) {
   const html = buildStockReportHtml(items, settings)
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
-  document.body.appendChild(iframe)
-  const doc = iframe.contentDocument
-  if (!doc) {
-    iframe.remove()
-    return
-  }
-  doc.open()
-  doc.write(html)
-  doc.close()
-  window.setTimeout(() => {
-    iframe.contentWindow?.focus()
-    iframe.contentWindow?.print()
-    window.setTimeout(() => iframe.remove(), 1000)
-  }, 350)
+  void printHtmlViaIframe({ html, mode: 'hidden' })
 }
 
-function buildStockReportHtml(items: StockItem[], settings: ClinicSettings) {
-  const today = new Date()
-  const generated = today.toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
+/** Exported for structure tests — visual markup preserved from legacy engine. */
+export function buildStockReportHtml(items: StockItem[], settings: ClinicSettings) {
+  const generated = formatGeneratedLongFr()
   const totalValue = items.reduce((sum, item) => sum + stockValue(item), 0)
   const expired = items.filter((i) => stockAlert(i) === 'expired')
   const low = items.filter((i) => stockAlert(i) === 'low')
   const expiring = items.filter((i) => stockAlert(i) === 'expiring')
-  const logo = settings.logo
-    ? `<img src="${escapeHtml(settings.logo)}" alt="" style="width:52px;height:52px;border-radius:12px;object-fit:cover;" />`
-    : `<div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#3d96c0,#0c4f73);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;">D</div>`
+  const logo = clinicLogoHtml(settings)
 
   const rows = items
     .map((item) => {
       const alert = stockAlert(item)
       const meta = stockAlertMeta(alert)
-      const bg = alert === 'expired' || alert === 'low' ? '#fef2f2' : alert === 'expiring' ? '#fff7ed' : '#ffffff'
+      const bg =
+        alert === 'expired' || alert === 'low' ? '#fef2f2' : alert === 'expiring' ? '#fff7ed' : '#ffffff'
       return `<tr style="background:${bg};">
         <td>${escapeHtml(item.code)}</td>
         <td><strong>${escapeHtml(item.name)}</strong></td>
@@ -73,33 +51,13 @@ function buildStockReportHtml(items: StockItem[], settings: ClinicSettings) {
     })
     .join('')
 
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>Inventaire stock — DentiSuite</title>
-  <style>
-    @page { size: A4 landscape; margin: 14mm; }
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #0f172a; margin: 0; }
-    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0e628e; padding-bottom: 12px; margin-bottom: 16px; }
-    h1 { font-size: 20px; margin: 0 0 4px; color: #0b3d5c; }
-    .muted { color: #64748b; font-size: 12px; }
-    .kpis { display: flex; gap: 12px; margin: 0 0 16px; }
-    .kpi { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; }
-    .kpi b { display: block; font-size: 18px; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { text-align: left; background: #0e628e; color: #fff; padding: 8px; font-weight: 600; }
-    td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+  const css = `${a4ReportBaseCss('landscape')}
     .badge.ok { background: #d1fae5; color: #065f46; }
     .badge.low, .badge.expired { background: #fee2e2; color: #991b1b; }
     .badge.expiring { background: #ffedd5; color: #9a3412; }
-    .renew { margin-top: 16px; }
-    footer { margin-top: 18px; font-size: 10px; color: #64748b; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-  </style>
-</head>
-<body>
+    .renew { margin-top: 16px; }`
+
+  const body = `
   <header>
     <div style="display:flex;gap:12px;align-items:center;">
       ${logo}
@@ -137,7 +95,11 @@ function buildStockReportHtml(items: StockItem[], settings: ClinicSettings) {
   <footer>
     <span>Document interne — ${escapeHtml(settings.name)}</span>
     <span>DentiSuite · Gestion de stock</span>
-  </footer>
-</body>
-</html>`
+  </footer>`
+
+  return wrapA4Document({
+    title: 'Inventaire stock — DentiSuite',
+    css,
+    body,
+  })
 }

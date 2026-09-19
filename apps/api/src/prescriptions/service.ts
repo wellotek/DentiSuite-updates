@@ -20,6 +20,11 @@ export type PublicPrescriptionLine = {
   posology: string;
   duration: string;
   notes: string;
+  medicationId: string | null;
+  dci: string | null;
+  form: string | null;
+  dosage: string | null;
+  quantity: string | null;
 };
 
 export type PublicPrescription = {
@@ -27,6 +32,8 @@ export type PublicPrescription = {
   organizationId: string;
   patientId: string;
   patientName: string;
+  patientBirthDate: string | null;
+  patientAge: number | null;
   date: string;
   title: string;
   templateId: string | null;
@@ -64,6 +71,8 @@ export class PrescriptionService {
       organizationId: row.organizationId,
       patientId: row.patientId,
       patientName: row.patientName,
+      patientBirthDate: row.patientBirthDate ?? null,
+      patientAge: row.patientAge ?? null,
       date: formatCalendarDate(row.date),
       title: row.title,
       templateId: row.templateId,
@@ -76,6 +85,11 @@ export class PrescriptionService {
         posology: line.posology,
         duration: line.duration,
         notes: line.notes,
+        medicationId: line.medicationId ?? null,
+        dci: line.dci ?? null,
+        form: line.form ?? null,
+        dosage: line.dosage ?? null,
+        quantity: line.quantity ?? null,
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -89,12 +103,28 @@ export class PrescriptionService {
   ): Promise<PublicPrescription> {
     const patient = await this.requireTenantPatient(scope, patientId);
     const patientName = `${patient.firstName} ${patient.lastName}`.trim();
+    const birthDate = patient.birthDate ?? null;
+    let patientAge: number | null = patient.age;
+    if (birthDate) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate);
+      if (m) {
+        const y = Number(m[1]);
+        const mo = Number(m[2]);
+        const d = Number(m[3]);
+        const now = new Date();
+        let age = now.getFullYear() - y;
+        const month = now.getMonth() - (mo - 1);
+        if (month < 0 || (month === 0 && now.getDate() < d)) age -= 1;
+        if (age >= 0 && age <= 150) patientAge = age;
+      }
+    }
     const row = await this.prescriptions.create(
       scope,
       randomUUID(),
       patientId,
       patientName,
       input,
+      { patientBirthDate: birthDate, patientAge },
     );
     this.logger.info(
       {
@@ -117,6 +147,20 @@ export class PrescriptionService {
     const { items, total } = await this.prescriptions.listForPatient(
       scope,
       patientId,
+      query,
+    );
+    return {
+      items: items.map((i) => this.toPublic(i)),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit) || 1),
+    };
+  }
+
+  async listForOrganization(scope: TenantScope, query: ListPrescriptionsQuery) {
+    const { items, total } = await this.prescriptions.listForOrganization(
+      scope,
       query,
     );
     return {

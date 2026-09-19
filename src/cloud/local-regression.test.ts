@@ -62,6 +62,7 @@ describe('local store regression (Phase 7A / 8A)', () => {
     expect(clinic.schemaVersion).toBe(CLINIC_SCHEMA_VERSION)
     expect(clinic.patients).toHaveLength(1)
     expect(clinic.patients[0]?.firstName).toBe('Ada')
+    expect(Array.isArray(clinic.medicationCatalog)).toBe(true)
   })
 
   it('does not invent organizationId on clinic state', () => {

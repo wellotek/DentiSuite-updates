@@ -9,7 +9,7 @@ export type RateLimitEntry = {
 /**
  * Simple in-memory rate limiter (single process).
  * Limitation: counters are NOT shared across multiple API instances.
- * Phase 2 is safe for single-node / desktop-dev; replace with Redis later if multi-instance.
+ * Safe for single-node; replace with Redis later if multi-instance.
  */
 export class MemoryRateLimitStore {
   private readonly buckets = new Map<string, RateLimitEntry>();
@@ -43,17 +43,34 @@ export class MemoryRateLimitStore {
   }
 }
 
+/**
+ * Client IP for rate limiting.
+ * By default ignore X-Forwarded-For / X-Real-Ip (spoofable).
+ * Set TRUST_PROXY=true only behind a trusted reverse proxy (e.g. Railway).
+ */
+export function clientIpFromRequest(
+  c: { req: { header: (name: string) => string | undefined } },
+  trustProxy: boolean,
+): string {
+  if (trustProxy) {
+    const xff = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    if (xff) return xff;
+    const real = c.req.header('x-real-ip')?.trim();
+    if (real) return real;
+  }
+  return 'local';
+}
+
 export function createRateLimitMiddleware(options: {
   store: MemoryRateLimitStore;
   windowMs: number;
   max: number;
   keyPrefix: string;
+  /** When true, honor X-Forwarded-For / X-Real-Ip (trusted proxy only). */
+  trustProxy?: boolean;
 }): MiddlewareHandler {
   return async (c, next) => {
-    const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-      c.req.header('x-real-ip') ||
-      'local';
+    const ip = clientIpFromRequest(c, options.trustProxy === true);
     const key = `${options.keyPrefix}:${ip}:${c.req.path}`;
     const result = options.store.hit(key, options.windowMs, options.max);
 

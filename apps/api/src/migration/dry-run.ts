@@ -46,6 +46,7 @@ export type PlannedPatient = {
   lastName: string;
   phone: string;
   age: number;
+  birthDate: string | null;
   address: string;
   antecedents: string;
   hasAllergies: boolean;
@@ -478,6 +479,9 @@ export function runDryRun(config: MigrationConfig): DryRunResult {
       continue;
     }
     const dentistId = remapDentist(localString(row.dentistId), maps, issues, 'patient', localId);
+    const birthRaw = localString(row.birthDate);
+    const birthDate =
+      birthRaw && /^\d{4}-\d{2}-\d{2}$/.test(birthRaw) ? birthRaw : null;
     planned.patients.push({
       localId,
       cloudId: maps.patient.get(localId)!,
@@ -485,6 +489,7 @@ export function runDryRun(config: MigrationConfig): DryRunResult {
       lastName,
       phone,
       age: ageRaw,
+      birthDate,
       address: localString(row.address) ?? '',
       antecedents: localString(row.antecedents) ?? '',
       hasAllergies: localBoolean(row.hasAllergies) ?? false,

@@ -19,6 +19,17 @@ describe('cloud API allowlist', () => {
     expect(() => assertCloudPathAllowed('POST', '/dentists')).not.toThrow()
     expect(() => assertCloudPathAllowed('PATCH', '/stock/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).not.toThrow()
     expect(() => assertCloudPathAllowed('DELETE', '/patients/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).not.toThrow()
+    expect(() => assertCloudPathAllowed('POST', '/patients')).toThrow(/allowlisted/i)
+    expect(() => assertCloudPathAllowed('PATCH', '/patients/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).toThrow(
+      /allowlisted/i,
+    )
+    expect(() =>
+      assertCloudPathAllowed('POST', '/patients/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/restore'),
+    ).not.toThrow()
+    expect(() => assertCloudPathAllowed('GET', '/consultations')).not.toThrow()
+    expect(() => assertCloudPathAllowed('GET', '/treatments')).not.toThrow()
+    expect(() => assertCloudPathAllowed('GET', '/prescriptions')).not.toThrow()
+    expect(() => assertCloudPathAllowed('GET', '/media')).not.toThrow()
     expect(() => assertCloudPathAllowed('GET', '/team')).not.toThrow()
     expect(() => assertCloudPathAllowed('POST', '/team')).not.toThrow()
     expect(() => assertCloudPathAllowed('PATCH', '/team/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).not.toThrow()

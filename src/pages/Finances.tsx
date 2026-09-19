@@ -38,6 +38,11 @@ import { printFinanceReport } from '../lib/financeReport'
 import { FinanceDatePicker } from '../components/finances/FinanceDatePicker'
 import { FinanceChart } from '../components/finances/FinanceChart'
 import { TransactionModal } from '../components/finances/TransactionModal'
+import {
+  ContextBackButton,
+  PatientContextBar,
+  useOptionalPatientContext,
+} from '../components/patients/PatientContextBar'
 
 export function Finances() {
   const t = useT()
@@ -54,6 +59,7 @@ export function Finances() {
   const [status, setStatus] = useState<'all' | 'paid' | 'billed'>('all')
   const [editing, setEditing] = useState<Invoice | null | 'new'>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const { patient: contextPatient } = useOptionalPatientContext(patients)
 
   const cursor = period.cursor
   const yesterday = shiftIso(cursor, -1)
@@ -104,6 +110,12 @@ export function Finances() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      {contextPatient ? (
+        <div className="space-y-3">
+          <ContextBackButton />
+          <PatientContextBar patient={contextPatient} />
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t('finances.title')}</h1>

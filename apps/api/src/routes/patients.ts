@@ -73,6 +73,7 @@ export function createPatientRoutes(deps: PatientRouteDeps) {
       search: c.req.query('search') ?? '',
       page: c.req.query('page') ?? '1',
       limit: c.req.query('limit') ?? '20',
+      includeArchived: c.req.query('includeArchived') ?? 'false',
     });
     if (!query.success) {
       throw new AppError(
@@ -87,7 +88,7 @@ export function createPatientRoutes(deps: PatientRouteDeps) {
   });
 
   routes.get('/:id', requireAuth, requireTenant, requireRead, async (c) => {
-    const patient = await deps.patientService.getById(tenantScope(c), c.req.param('id'));
+    const patient = await deps.patientService.get(tenantScope(c), c.req.param('id'));
     return c.json({ ok: true as const, patient });
   });
 
@@ -127,20 +128,59 @@ export function createPatientRoutes(deps: PatientRouteDeps) {
     return c.json({ ok: true as const, patient });
   });
 
+  /** Soft-archive (preserves clinical history). Same permission as former hard delete. */
   routes.delete('/:id', requireAuth, requireTenant, requireDelete, async (c) => {
     const scope = tenantScope(c);
     const id = c.req.param('id');
-    await deps.patientService.delete(scope, id);
+    const actor = routeAuditActor(c);
+    const patient = await deps.patientService.archive(
+      scope,
+      id,
+      actor?.user?.id ?? null,
+    );
     await writeAuditLog(deps.prisma, {
       organizationId: scope.organizationId,
-      actor: routeAuditActor(c),
-      action: 'PATIENT_DELETED',
+      actor,
+      action: 'PATIENT_ARCHIVED',
       module: 'patients',
       resourceType: 'patient',
       resourceId: id,
-      summary: 'Patient supprimé',
+      summary: `Patient archivé : ${patient.firstName} ${patient.lastName}`,
     });
-    return c.json({ ok: true as const });
+    return c.json({ ok: true as const, patient, archived: true as const });
+  });
+
+  routes.post('/:id/restore', requireAuth, requireTenant, requireUpdate, async (c) => {
+    const scope = tenantScope(c);
+    const id = c.req.param('id');
+    const patient = await deps.patientService.restore(scope, id);
+    await writeAuditLog(deps.prisma, {
+      organizationId: scope.organizationId,
+      actor: routeAuditActor(c),
+      action: 'PATIENT_RESTORED',
+      module: 'patients',
+      resourceType: 'patient',
+      resourceId: id,
+      summary: `Patient restauré : ${patient.firstName} ${patient.lastName}`,
+    });
+    return c.json({ ok: true as const, patient });
+  });
+
+  /** Explicit physical purge — irreversible. */
+  routes.post('/:id/purge', requireAuth, requireTenant, requireDelete, async (c) => {
+    const scope = tenantScope(c);
+    const id = c.req.param('id');
+    await deps.patientService.purge(scope, id);
+    await writeAuditLog(deps.prisma, {
+      organizationId: scope.organizationId,
+      actor: routeAuditActor(c),
+      action: 'PATIENT_PURGED',
+      module: 'patients',
+      resourceType: 'patient',
+      resourceId: id,
+      summary: 'Patient purgé définitivement',
+    });
+    return c.json({ ok: true as const, purged: true as const });
   });
 
   return routes;

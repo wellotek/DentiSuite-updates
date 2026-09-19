@@ -75,13 +75,50 @@ export interface Patient {
   firstName: string
   lastName: string
   phone: string
+  /** Stored age (legacy / fallback). Prefer birthDate when present. */
   age: number
+  /** ISO date YYYY-MM-DD — source of truth for age when set. */
+  birthDate?: string | null
   address: string
   antecedents: string
   hasAllergies: boolean
   dentistId?: string
   teeth: Record<string, ToothRecord>
   notes?: string
+  /** ISO timestamp from Cloud — used for optimistic concurrency. */
+  updatedAt?: string
+  /** Soft-archive timestamp (Cloud + Legacy). Active lists exclude archived. */
+  archivedAt?: string | null
+  archivedBy?: string | null
+}
+
+export type MedicationStatus = 'active' | 'inactive'
+
+export type MedicationFamily =
+  | 'antibiotique'
+  | 'antalgique'
+  | 'anti-inflammatoire'
+  | 'antiseptique'
+  | 'anesthesique'
+  | 'antifongique'
+  | 'antiviral'
+  | 'corticoide'
+  | 'pediatrie'
+  | 'autre'
+
+/** Reference catalog entry — never mutated by a prescription. */
+export interface MedicationItem {
+  id: string
+  name: string
+  dci: string
+  dosage: string
+  form: string
+  route?: string
+  family?: MedicationFamily | string
+  market?: string
+  status: MedicationStatus
+  source: string
+  lastVerifiedAt: string
 }
 
 export interface Treatment {
@@ -196,12 +233,22 @@ export interface PrescriptionLine {
   posology: string
   duration: string
   notes: string
+  /** Catalog reference id at selection time (optional; snapshot, not a live FK). */
+  medicationId?: string
+  dci?: string
+  form?: string
+  dosage?: string
+  quantity?: string
 }
 
 export interface Prescription {
   id: string
   patientId?: string
   patientName: string
+  /** Snapshot at prescription time (YYYY-MM-DD). */
+  patientBirthDate?: string | null
+  /** Snapshot age at prescription time. */
+  patientAge?: number | null
   date: string
   title: string
   templateId?: string
@@ -223,6 +270,8 @@ export interface ClinicState {
   dentists: Dentist[]
   settings: ClinicSettings
   actCatalog: ActItem[]
+  /** Clinic overrides + custom meds (merged with global seed). */
+  medicationCatalog: MedicationItem[]
   stockItems: StockItem[]
   sessions: PatientSession[]
   mediaFiles: PatientMedia[]
@@ -247,6 +296,8 @@ export interface DentiSuiteAPI {
   retryLicense?: () => Promise<LicenseStatus>
   getClinic: () => Promise<ClinicState | null>
   setClinic: (clinic: ClinicState) => Promise<void | { ok?: boolean; code?: string; message?: string }>
+  getBranding?: () => Promise<{ logo: string; adminPhoto: string }>
+  setBranding?: (branding: { logo: string; adminPhoto: string }) => Promise<{ ok?: boolean }>
   saveMedia?: (input: {
     patientId: string
     fileId: string
@@ -345,6 +396,7 @@ export interface DentiSuiteAPI {
     lastName: string
     phone: string
     age: number
+    birthDate?: string | null
     address?: string
     antecedents?: string
     hasAllergies?: boolean
@@ -361,6 +413,7 @@ export interface DentiSuiteAPI {
     lastName?: string
     phone?: string
     age?: number
+    birthDate?: string | null
     address?: string
     antecedents?: string
     hasAllergies?: boolean

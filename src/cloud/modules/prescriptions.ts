@@ -4,12 +4,26 @@ export type CloudPrescription = {
   id: string
   organizationId: string
   patientId: string
+  patientName?: string
+  patientBirthDate?: string | null
+  patientAge?: number | null
   date: string
   title: string
   dentistId: string | null
   dentistName: string | null
   advice: string | null
-  lines?: Array<{ id: string; drug: string; posology: string; duration: string; notes: string | null }>
+  lines?: Array<{
+    id: string
+    drug: string
+    posology: string
+    duration: string
+    notes: string | null
+    medicationId?: string | null
+    dci?: string | null
+    form?: string | null
+    dosage?: string | null
+    quantity?: string | null
+  }>
 }
 
 export async function listPrescriptions(
@@ -19,6 +33,17 @@ export async function listPrescriptions(
   const data = await cloudApi<Partial<CloudListResult<CloudPrescription>>>({
     method: 'GET',
     path: `/patients/${patientId}/prescriptions`,
+    query,
+  })
+  return asList(data)
+}
+
+export async function listOrgPrescriptions(
+  query: Record<string, string | number | undefined> = {},
+) {
+  const data = await cloudApi<Partial<CloudListResult<CloudPrescription>>>({
+    method: 'GET',
+    path: '/prescriptions',
     query,
   })
   return asList(data)

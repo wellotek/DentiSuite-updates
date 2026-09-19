@@ -38,6 +38,16 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /** Max auth attempts per IP+route within the window. */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  /**
+   * When true, rate-limit keys use X-Forwarded-For / X-Real-Ip.
+   * Enable only behind a trusted reverse proxy (Railway, nginx).
+   */
+  TRUST_PROXY: z.enum(['true', 'false']).optional(),
+  /**
+   * When false, POST /organization is rejected (commercial path = bootstrap + license).
+   * Defaults: allowed in development/test; blocked in production.
+   */
+  ALLOW_OPEN_ORG_CREATE: z.enum(['true', 'false']).optional(),
   /** Object storage: memory (default) or r2 (Cloudflare R2). */
   OBJECT_STORAGE_PROVIDER: z.enum(['memory', 'r2']).default('memory'),
   /** Signed upload/download URL TTL in seconds. */
@@ -63,6 +73,8 @@ export type AppConfig = {
   passwordMinLength: number;
   authRateLimitWindowMs: number;
   authRateLimitMax: number;
+  trustProxy: boolean;
+  allowOpenOrgCreate: boolean;
   objectStorageProvider: 'memory' | 'r2';
   mediaSignedUrlTtlSeconds: number;
   r2: {
@@ -99,6 +111,8 @@ export function loadConfig(
     PASSWORD_MIN_LENGTH: env.PASSWORD_MIN_LENGTH,
     AUTH_RATE_LIMIT_WINDOW_MS: env.AUTH_RATE_LIMIT_WINDOW_MS,
     AUTH_RATE_LIMIT_MAX: env.AUTH_RATE_LIMIT_MAX,
+    TRUST_PROXY: env.TRUST_PROXY,
+    ALLOW_OPEN_ORG_CREATE: env.ALLOW_OPEN_ORG_CREATE,
     OBJECT_STORAGE_PROVIDER: env.OBJECT_STORAGE_PROVIDER,
     MEDIA_SIGNED_URL_TTL_SECONDS: env.MEDIA_SIGNED_URL_TTL_SECONDS,
     R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
@@ -145,6 +159,13 @@ export function loadConfig(
     };
   }
 
+  const allowOpenOrgCreate =
+    data.ALLOW_OPEN_ORG_CREATE === 'true'
+      ? true
+      : data.ALLOW_OPEN_ORG_CREATE === 'false'
+        ? false
+        : data.NODE_ENV !== 'production';
+
   return {
     nodeEnv: data.NODE_ENV,
     port: data.PORT,
@@ -159,6 +180,8 @@ export function loadConfig(
     passwordMinLength: data.PASSWORD_MIN_LENGTH,
     authRateLimitWindowMs: data.AUTH_RATE_LIMIT_WINDOW_MS,
     authRateLimitMax: data.AUTH_RATE_LIMIT_MAX,
+    trustProxy: data.TRUST_PROXY === 'true',
+    allowOpenOrgCreate,
     objectStorageProvider: data.OBJECT_STORAGE_PROVIDER,
     mediaSignedUrlTtlSeconds: data.MEDIA_SIGNED_URL_TTL_SECONDS,
     r2,

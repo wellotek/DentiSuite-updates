@@ -79,6 +79,7 @@ export type CloudPatient = {
   lastName: string
   phone: string
   age: number
+  birthDate?: string | null
   address: string
   antecedents: string
   hasAllergies: boolean
@@ -86,6 +87,10 @@ export type CloudPatient = {
   notes: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  archivedAt?: string | null
+  archivedBy?: string | null
+  /** Alias used by some API responses during soft-delete transition. */
+  deletedAt?: string | null
 }
 
 export type CloudPatientList = {
@@ -102,6 +107,7 @@ export type CloudPatientCreateInput = {
   lastName: string
   phone: string
   age: number
+  birthDate?: string | null
   address?: string
   antecedents?: string
   hasAllergies?: boolean
@@ -116,11 +122,14 @@ export type CloudPatientUpdateInput = {
   lastName?: string
   phone?: string
   age?: number
+  birthDate?: string | null
   address?: string
   antecedents?: string
   hasAllergies?: boolean
   dentistId?: string | null
   notes?: string | null
+  /** Optimistic concurrency — ISO updatedAt from last read. */
+  expectedUpdatedAt?: string
 }
 
 export type CloudRequestInput = {

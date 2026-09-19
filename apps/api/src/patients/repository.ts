@@ -1,5 +1,9 @@
 import type { Patient, Prisma, PrismaClient } from '@prisma/client';
-import type { CreatePatientInput, ListPatientsQuery, UpdatePatientInput } from './schemas.js';
+import type {
+  CreatePatientInput,
+  ListPatientsQuery,
+  PatientPatch,
+} from './schemas.js';
 
 export type TenantScope = {
   organizationId: string;
@@ -20,6 +24,7 @@ export class PatientRepository {
         lastName: data.lastName,
         phone: data.phone,
         age: data.age,
+        birthDate: data.birthDate,
         address: data.address,
         antecedents: data.antecedents,
         hasAllergies: data.hasAllergies,
@@ -44,7 +49,7 @@ export class PatientRepository {
     scope: TenantScope,
     query: ListPatientsQuery,
   ): Promise<{ items: Patient[]; total: number }> {
-    const where = this.buildSearchWhere(scope.organizationId, query.search);
+    const where = this.buildSearchWhere(scope.organizationId, query.search, query.includeArchived);
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.patient.count({ where }),
@@ -62,7 +67,7 @@ export class PatientRepository {
   async update(
     scope: TenantScope,
     id: string,
-    data: UpdatePatientInput,
+    data: PatientPatch,
   ): Promise<Patient | null> {
     const existing = await this.findById(scope, id);
     if (!existing) {
@@ -81,7 +86,39 @@ export class PatientRepository {
     });
   }
 
-  async delete(scope: TenantScope, id: string): Promise<boolean> {
+  async archive(
+    scope: TenantScope,
+    id: string,
+    archivedBy: string | null,
+  ): Promise<Patient | null> {
+    const existing = await this.findById(scope, id);
+    if (!existing) return null;
+    if (existing.archivedAt) return existing;
+    return this.prisma.patient.update({
+      where: { id: existing.id },
+      data: {
+        archivedAt: new Date(),
+        archivedBy,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  async restore(scope: TenantScope, id: string): Promise<Patient | null> {
+    const existing = await this.findById(scope, id);
+    if (!existing) return null;
+    return this.prisma.patient.update({
+      where: { id: existing.id },
+      data: {
+        archivedAt: null,
+        archivedBy: null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /** Physical delete — only after explicit purge. Cascades clinical rows. */
+  async hardDelete(scope: TenantScope, id: string): Promise<boolean> {
     const existing = await this.findById(scope, id);
     if (!existing) {
       return false;
@@ -94,8 +131,12 @@ export class PatientRepository {
   private buildSearchWhere(
     organizationId: string,
     search: string,
+    includeArchived: boolean,
   ): Prisma.PatientWhereInput {
-    const base: Prisma.PatientWhereInput = { organizationId };
+    const base: Prisma.PatientWhereInput = {
+      organizationId,
+      ...(includeArchived ? {} : { archivedAt: null }),
+    };
     const q = search.trim();
     if (!q) {
       return base;

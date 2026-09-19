@@ -43,6 +43,8 @@ const MIGRATIONS = [
   '20260302400000_organization_migration_production_states',
   '20260302420000_organization_contact',
   '20260308120000_user_username_audit_log',
+  '20260913180000_patient_birthdate_medication_snapshot',
+  '20260914120000_patient_soft_archive',
 ] as const;
 
 function splitSqlStatements(sql: string): string[] {

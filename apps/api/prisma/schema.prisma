@@ -262,6 +262,8 @@ model Patient {
   lastName       String
   phone          String
   age            Int
+  /// Optional ISO date YYYY-MM-DD — source of truth for age when set.
+  birthDate      String?
   address        String
   antecedents    String
   hasAllergies   Boolean  @default(false)
@@ -270,6 +272,9 @@ model Patient {
   /// Odontogram map: Record<toothNumber, ToothRecord> as JSON.
   teeth          Json     @default("{}")
   notes          String?
+  /// Soft-archive — null = active. Historical relations retained.
+  archivedAt     DateTime?
+  archivedBy     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -285,6 +290,7 @@ model Patient {
   @@index([organizationId, id])
   @@index([organizationId, lastName, firstName])
   @@index([organizationId, phone])
+  @@index([organizationId, archivedAt])
 }
 
 /// Agenda appointment (mirrors local DentiSuite Appointment).
@@ -385,6 +391,10 @@ model Prescription {
   patientId      String   @db.Uuid
   /// Denormalized patient display name (matches local patientName).
   patientName    String
+  /// Snapshot at prescription time (YYYY-MM-DD) — historical, not live FK.
+  patientBirthDate String?
+  /// Snapshot age at prescription time.
+  patientAge     Int?
   date           DateTime @db.Date
   title          String
   /// Client-side template catalog id (opaque, not a Cloud FK).
@@ -414,6 +424,12 @@ model PrescriptionItem {
   posology       String @default("")
   duration       String @default("")
   notes          String @default("")
+  /// Catalog reference snapshot (optional).
+  medicationId   String?
+  dci            String?
+  form           String?
+  dosage         String?
+  quantity       String?
   /// Stable ordering within the prescription.
   sortOrder      Int    @default(0)
 

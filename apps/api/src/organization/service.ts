@@ -121,10 +121,16 @@ export class OrganizationService {
   async createOrganizationForUser(
     user: User,
     name: string,
+    options?: { attachDevLicense?: boolean },
   ): Promise<{
     organization: PublicOrganization;
     membership: PublicMembership;
-    licenseBinding: null;
+    licenseBinding: {
+      id: string;
+      licenseId: string;
+      maxUsers: number;
+      status: string;
+    } | null;
   }> {
     if (user.status !== 'ACTIVE') {
       throw new AppError(403, 'FORBIDDEN', 'Account is not active');
@@ -145,6 +151,11 @@ export class OrganizationService {
     const membershipId = randomUUID();
     const slug = buildOrganizationSlug(name);
     const now = new Date();
+    const attachDevLicense = options?.attachDevLicense === true;
+    const bindingId = attachDevLicense ? randomUUID() : null;
+    const devLicenseId = attachDevLicense
+      ? `DEV-${organizationId.replace(/-/g, '').slice(0, 16).toUpperCase()}`
+      : null;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -168,7 +179,34 @@ export class OrganizationService {
         },
       });
 
-      return { organization, membership };
+      let licenseBinding: {
+        id: string;
+        licenseId: string;
+        maxUsers: number;
+        status: string;
+      } | null = null;
+
+      if (attachDevLicense && bindingId && devLicenseId) {
+        const binding = await tx.licenseBinding.create({
+          data: {
+            id: bindingId,
+            organizationId: organization.id,
+            licenseId: devLicenseId,
+            maxUsers: 25,
+            status: 'ACTIVE',
+            lastValidatedAt: now,
+            updatedAt: now,
+          },
+        });
+        licenseBinding = {
+          id: binding.id,
+          licenseId: binding.licenseId,
+          maxUsers: binding.maxUsers,
+          status: binding.status,
+        };
+      }
+
+      return { organization, membership, licenseBinding };
     });
 
     logOrgEvent(this.logger, {
@@ -184,11 +222,18 @@ export class OrganizationService {
       organizationId: result.organization.id,
       role: 'ADMIN',
     });
+    if (result.licenseBinding) {
+      logOrgEvent(this.logger, {
+        type: 'license_binding_created',
+        organizationId: result.organization.id,
+        licenseBindingId: result.licenseBinding.id,
+      });
+    }
 
     return {
       organization: this.toPublicOrganization(result.organization),
       membership: this.toPublicMembership(result.membership),
-      licenseBinding: null,
+      licenseBinding: result.licenseBinding,
     };
   }
 

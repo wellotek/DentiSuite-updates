@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('dentisuite', {
   retryLicense: () => ipcRenderer.invoke('license:retry'),
   getClinic: () => ipcRenderer.invoke('clinic:get'),
   setClinic: (clinic) => ipcRenderer.invoke('clinic:set', clinic),
+  getBranding: () => ipcRenderer.invoke('branding:get'),
+  setBranding: (branding) => ipcRenderer.invoke('branding:set', branding),
   saveMedia: (input) => ipcRenderer.invoke('media:save', input),
   readMedia: (input) => ipcRenderer.invoke('media:read', input),
   deleteMedia: (input) => ipcRenderer.invoke('media:delete', input),

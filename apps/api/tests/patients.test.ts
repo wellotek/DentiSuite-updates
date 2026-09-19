@@ -137,13 +137,19 @@ describe('patient cloud API', () => {
       headers: authHeader(orgA.user.token),
     });
     expect(delOwn.status).toBe(200);
+    // Soft-archive: patient still readable by id, hidden from default list
     expect(
       (
         await orgA.app.request(`/patients/${patientA.patient.id}`, {
           headers: authHeader(orgA.user.token),
         })
       ).status,
-    ).toBe(404);
+    ).toBe(200);
+    const listAfter = await orgA.app.request('/patients?limit=100', {
+      headers: authHeader(orgA.user.token),
+    });
+    const listedAfter = (await listAfter.json()) as { items: { id: string }[] };
+    expect(listedAfter.items.find((p) => p.id === patientA.patient.id)).toBeUndefined();
   });
 
   it('Assistant can read/create; denied update/delete when override removes permission', async () => {

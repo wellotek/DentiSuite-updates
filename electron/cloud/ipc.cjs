@@ -9,7 +9,12 @@ const { isEncryptionAvailable } = require('./session.cjs')
 const { cloudFetch, toIpcError } = require('./api-proxy.cjs')
 const sessionManager = require('./session-manager.cjs')
 const { stripSecrets } = require('./redact.cjs')
-const { listPatients, createPatient, updatePatient } = require('./patients.cjs')
+const {
+  listPatients,
+  createPatient,
+  updatePatient,
+  assertPatientsReadOnly,
+} = require('./patients.cjs')
 const { assertCloudPathAllowed, scrubCloudBody } = require('./allowlist.cjs')
 
 function assertProbeEnabled() {
@@ -219,6 +224,7 @@ function registerCloudIpc() {
       }
       // Allowlisted business API only (patients dedicated IPC still preferred for create/update).
       assertCloudPathAllowed(method || 'GET', reqPath)
+      assertPatientsReadOnly(method || 'GET', reqPath)
       const result = await cloudFetch({
         method: method || 'GET',
         path: reqPath,

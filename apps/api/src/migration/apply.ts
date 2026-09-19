@@ -409,6 +409,7 @@ async function insertPatients(
           lastName: row.lastName,
           phone: row.phone,
           age: row.age,
+          birthDate: row.birthDate ?? null,
           address: row.address,
           antecedents: row.antecedents,
           hasAllergies: row.hasAllergies,

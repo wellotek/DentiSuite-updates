@@ -3,6 +3,7 @@ import { AppError } from '../lib/errors.js';
 
 /**
  * Runtime license gates for commercial multi-tenant.
+ * Organization without an ACTIVE LicenseBinding cannot use tenant routes.
  * Existing ACTIVE members keep access when at seat limit; only new seats are blocked.
  */
 
@@ -17,10 +18,20 @@ function isExpired(binding: LicenseGateBinding, now = new Date()): boolean {
   return false;
 }
 
+/**
+ * Commercial access requires an ACTIVE, non-expired LicenseBinding.
+ * Missing binding → LICENSE_REQUIRED (no silent pass).
+ */
 export function assertLicenseBindingActive(
   binding: LicenseGateBinding | null | undefined,
 ): void {
-  if (!binding) return;
+  if (!binding) {
+    throw new AppError(
+      403,
+      'LICENSE_REQUIRED',
+      'Organization license binding required',
+    );
+  }
 
   if (binding.status === 'DISABLED' || binding.status === 'PENDING') {
     throw new AppError(403, 'LICENSE_INACTIVE', 'Organization license is not active');
@@ -52,15 +63,14 @@ export async function loadOrganizationLicenseBinding(
   });
 }
 
-/** Gate tenant routes: expired/disabled binding blocks clinical access. */
+/** Gate tenant routes: missing / expired / disabled binding blocks access. */
 export async function assertOrganizationLicenseAllowsAccess(
   prisma: PrismaClient,
   organizationId: string,
-): Promise<LicenseGateBinding | null> {
+): Promise<LicenseGateBinding> {
   const binding = await loadOrganizationLicenseBinding(prisma, organizationId);
-  // Orgs without a binding (legacy createOrganizationForUser path) remain usable.
   assertLicenseBindingActive(binding);
-  return binding;
+  return binding as LicenseGateBinding;
 }
 
 /**
@@ -73,7 +83,7 @@ export async function assertOrganizationSeatAvailable(
 ): Promise<void> {
   const binding = await loadOrganizationLicenseBinding(prisma, organizationId);
   assertLicenseBindingActive(binding);
-  if (!binding) return;
+  const active = binding as LicenseGateBinding;
 
   const activeSeats = await prisma.membership.count({
     where: {
@@ -82,11 +92,11 @@ export async function assertOrganizationSeatAvailable(
     },
   });
 
-  if (activeSeats >= binding.maxUsers) {
+  if (activeSeats >= active.maxUsers) {
     throw new AppError(
       403,
       'LICENSE_SEAT_LIMIT',
-      `License seat limit reached (${binding.maxUsers} users)`,
+      `License seat limit reached (${active.maxUsers} users)`,
     );
   }
 }

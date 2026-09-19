@@ -2,7 +2,7 @@ import type { ClinicState } from '../types'
 import { defaultActCatalog } from './acts'
 import { defaultStockItems } from '../lib/stock'
 
-export const CLINIC_SCHEMA_VERSION = 8
+export const CLINIC_SCHEMA_VERSION = 9
 
 export const seedClinic: ClinicState = {
   schemaVersion: CLINIC_SCHEMA_VERSION,
@@ -13,6 +13,7 @@ export const seedClinic: ClinicState = {
       lastName: 'Martin',
       phone: '06 12 34 56 78',
       age: 34,
+      birthDate: '1992-03-15',
       address: '12 rue des Lilas, 75011 Paris',
       antecedents: 'Allergie à la pénicilline',
       hasAllergies: true,
@@ -29,6 +30,7 @@ export const seedClinic: ClinicState = {
       lastName: 'Benali',
       phone: '06 98 76 54 32',
       age: 52,
+      birthDate: '1974-08-22',
       address: '8 avenue Hassan II, 20000 Casablanca',
       antecedents: 'Diabète de type 2, HTA',
       hasAllergies: false,
@@ -44,6 +46,7 @@ export const seedClinic: ClinicState = {
       lastName: 'Lefèvre',
       phone: '06 11 22 33 44',
       age: 8,
+      birthDate: '2018-01-10',
       address: '3 impasse des Écoles, 69003 Lyon',
       antecedents: 'Aucun',
       hasAllergies: false,
@@ -566,6 +569,7 @@ export const seedClinic: ClinicState = {
     locale: 'fr',
   },
   actCatalog: defaultActCatalog,
+  medicationCatalog: [],
   stockItems: defaultStockItems,
   sessions: [
     {

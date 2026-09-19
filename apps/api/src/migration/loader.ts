@@ -3,6 +3,7 @@ import { issue, type Issue } from './issues.js';
 import {
   localClinicSchema,
   localStoreEnvelopeSchema,
+  ACCEPTED_CLINIC_SCHEMA_VERSIONS,
   SUPPORTED_CLINIC_SCHEMA_VERSION,
   type LocalClinic,
 } from './source-schema.js';
@@ -55,13 +56,13 @@ export function loadLocalStore(sourcePath: string): LoadedStore {
 
   const issues: Issue[] = [];
   const schemaVersion = clinicParsed.data.schemaVersion;
-  if (schemaVersion !== SUPPORTED_CLINIC_SCHEMA_VERSION) {
+  if (!ACCEPTED_CLINIC_SCHEMA_VERSIONS.has(schemaVersion)) {
     issues.push(
       issue(
         'ERROR',
         'SCHEMA_VERSION',
         'clinic',
-        `schemaVersion ${schemaVersion} is not supported (expected ${SUPPORTED_CLINIC_SCHEMA_VERSION})`,
+        `schemaVersion ${schemaVersion} is not supported (expected one of ${[...ACCEPTED_CLINIC_SCHEMA_VERSIONS].join(', ')}; baseline ${SUPPORTED_CLINIC_SCHEMA_VERSION})`,
         { details: { schemaVersion } },
       ),
     );

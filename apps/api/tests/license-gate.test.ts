@@ -6,8 +6,8 @@ import {
 } from '../src/organization/license-gate.js';
 
 describe('license-gate', () => {
-  it('allows missing binding (legacy org path)', () => {
-    expect(() => assertLicenseBindingActive(null)).not.toThrow();
+  it('rejects missing binding (commercial gate)', () => {
+    expect(() => assertLicenseBindingActive(null)).toThrow(/license binding required/i);
   });
 
   it('rejects EXPIRED status and past expiresAt', () => {

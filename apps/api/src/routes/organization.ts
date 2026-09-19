@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { AuthService } from '../auth/service.js';
+import type { AppConfig } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 import {
   createAuthMiddleware,
@@ -19,6 +20,7 @@ import {
 export type OrganizationRouteDeps = {
   authService: AuthService;
   organizationService: OrganizationService;
+  config: AppConfig;
 };
 
 function parseJson<T>(
@@ -56,15 +58,26 @@ export function createOrganizationRoutes(deps: OrganizationRouteDeps) {
   const requireAdmin = requireAdminRole();
 
   routes.post('/', requireAuth, async (c) => {
+    if (!deps.config.allowOpenOrgCreate) {
+      throw new AppError(
+        403,
+        'ORG_BOOTSTRAP_REQUIRED',
+        'Open organization create is disabled. Use /auth/bootstrap-organization with a license key.',
+      );
+    }
+
     const body = parseJson(
       createOrganizationSchema(),
       await c.req.json().catch(() => ({})),
     );
 
     // userId is always taken from authenticated context — never from body.
+    // Dev/test open-create attaches a synthetic ACTIVE binding so tenant gates work.
+    // Production keeps ALLOW_OPEN_ORG_CREATE=false (commercial path = bootstrap only).
     const result = await deps.organizationService.createOrganizationForUser(
       c.get('user'),
       body.name,
+      { attachDevLicense: deps.config.allowOpenOrgCreate },
     );
 
     return c.json(
@@ -72,7 +85,7 @@ export function createOrganizationRoutes(deps: OrganizationRouteDeps) {
         ok: true as const,
         organization: result.organization,
         membership: result.membership,
-        licenseBinding: null,
+        licenseBinding: result.licenseBinding,
       },
       201,
     );

@@ -15,6 +15,7 @@ import { patientHasAllergies } from '../data/teeth'
 import { inferCategory, toISODate } from './agenda'
 import { toDZD } from './money'
 import { dentistName } from './dentists'
+import { applyBrandingToSettings, loadBrandingAssets } from './brandingStorage'
 
 const LOCAL_CLINIC = 'dentisuite.clinic'
 
@@ -37,6 +38,7 @@ type LooseClinic = Partial<ClinicState> & {
   dentists?: Dentist[]
   settings?: Partial<ClinicSettings>
   actCatalog?: ClinicState['actCatalog']
+  medicationCatalog?: ClinicState['medicationCatalog']
   stockItems?: StockItem[]
   sessions?: PatientSession[]
   mediaFiles?: PatientMedia[]
@@ -56,6 +58,10 @@ function migratePatient(raw: RawPatient, fallback?: Patient): Patient {
     lastName: raw.lastName,
     phone: raw.phone ?? fallback?.phone ?? '',
     age: raw.age ?? fallback?.age ?? 0,
+    birthDate: raw.birthDate ?? fallback?.birthDate ?? null,
+    archivedAt: raw.archivedAt ?? fallback?.archivedAt ?? null,
+    archivedBy: raw.archivedBy ?? fallback?.archivedBy ?? null,
+    updatedAt: raw.updatedAt ?? fallback?.updatedAt,
     address: raw.address ?? fallback?.address ?? '',
     antecedents,
     hasAllergies,
@@ -150,6 +156,7 @@ export function migrateClinic(raw: LooseClinic | null | undefined): ClinicState 
     dentists,
     settings,
     actCatalog,
+    medicationCatalog: Array.isArray(raw.medicationCatalog) ? raw.medicationCatalog : [],
     stockItems: Array.isArray(raw.stockItems) ? raw.stockItems : seedClinic.stockItems,
     sessions: Array.isArray(raw.sessions) ? raw.sessions : seedClinic.sessions,
     mediaFiles: Array.isArray(raw.mediaFiles) ? raw.mediaFiles : [],
@@ -171,6 +178,8 @@ export async function loadClinic(): Promise<ClinicState> {
   }
 
   const clinic = migrateClinic(raw)
+  const branding = await loadBrandingAssets()
+  clinic.settings = applyBrandingToSettings(clinic.settings, branding)
   const needsWrite = !raw || raw.schemaVersion !== CLINIC_SCHEMA_VERSION
   if (needsWrite) await saveClinic(clinic)
   return clinic

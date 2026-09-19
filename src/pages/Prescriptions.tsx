@@ -13,6 +13,12 @@ import { printPrescription } from '../lib/prescriptionReport'
 import type { Prescription, PrescriptionDraft } from '../types'
 import { PrescriptionEditor } from '../components/prescriptions/PrescriptionEditor'
 import { dentistName } from '../lib/dentists'
+import {
+  ContextBackButton,
+  PatientContextBar,
+  useOptionalPatientContext,
+} from '../components/patients/PatientContextBar'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 export function Prescriptions() {
   const t = useT()
@@ -26,14 +32,17 @@ export function Prescriptions() {
   const updatePrescription = useAppStore((s) => s.updatePrescription)
   const deletePrescription = useAppStore((s) => s.deletePrescription)
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query, 200)
   const [editing, setEditing] = useState<Prescription | PrescriptionDraft | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const { patient: contextPatient } = useOptionalPatientContext(patients)
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = debouncedQuery.trim().toLowerCase()
     return [...prescriptions]
       .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
       .filter((rx) => {
+        if (contextPatient && rx.patientId && rx.patientId !== contextPatient.id) return false
         if (!q) return true
         return (
           rx.patientName.toLowerCase().includes(q) ||
@@ -41,7 +50,7 @@ export function Prescriptions() {
           rx.lines.some((l) => l.drug.toLowerCase().includes(q))
         )
       })
-  }, [prescriptions, query])
+  }, [prescriptions, debouncedQuery, contextPatient])
 
   function printRx(rx: Prescription | PrescriptionDraft) {
     console.log('[PDF] Button clicked')
@@ -54,6 +63,12 @@ export function Prescriptions() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      {contextPatient ? (
+        <div className="space-y-3">
+          <ContextBackButton />
+          <PatientContextBar patient={contextPatient} />
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t('rx.titlePage')}</h1>
@@ -65,6 +80,10 @@ export function Prescriptions() {
             const dentist = dentists[0]
             setEditing({
               ...emptyPrescriptionDraft(),
+              patientId: contextPatient?.id,
+              patientName: contextPatient
+                ? `${contextPatient.firstName} ${contextPatient.lastName}`
+                : '',
               dentistId: dentist?.id,
               dentistName: dentist ? dentistName(dentist) : '',
             })

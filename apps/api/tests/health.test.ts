@@ -37,7 +37,7 @@ describe('GET /health', () => {
 
     expect(body.ok).toBe(true);
     expect(body.product).toBe('DentiSuite');
-    expect(body.version).toBe('3.1.1');
+    expect(body.version).toBe('3.1.2');
     expect(body.env).toBe('test');
   });
 

@@ -8,6 +8,9 @@ import { COMMON_ACTS } from '../../data/teeth'
 import { useT } from '../../i18n'
 import { useAppStore } from '../../store/useAppStore'
 import { isCloudClinicMode } from '../../cloud/cloudClinicMode'
+import { PatientPicker } from '../patients/PatientPicker'
+import { useToast } from '../ui/Toast'
+import { Link } from 'react-router-dom'
 
 const NEW_PATIENT = '__new__'
 
@@ -16,6 +19,8 @@ interface Props {
   dentists: Dentist[]
   defaultDate: string
   appointment?: Appointment | null
+  /** Prefill patient when creating (e.g. from patient chart). */
+  defaultPatientId?: string
   onClose: () => void
   onSave: (draft: AppointmentDraft) => void | Promise<void>
   onDelete?: () => void
@@ -26,17 +31,23 @@ export function NewAppointmentModal({
   dentists,
   defaultDate,
   appointment,
+  defaultPatientId,
   onClose,
   onSave,
   onDelete,
 }: Props) {
   const t = useT()
+  const toast = useToast()
   const addPatient = useAppStore((s) => s.addPatient)
   const addPatientCloud = useAppStore((s) => s.addPatientCloud)
   const editing = Boolean(appointment)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [form, setForm] = useState({
-    patientId: appointment?.patientId || patients[0]?.id || NEW_PATIENT,
+    patientId:
+      appointment?.patientId ||
+      defaultPatientId ||
+      patients[0]?.id ||
+      NEW_PATIENT,
     fullName: appointment?.patientName ?? '',
     phone: appointment?.patientPhone ?? '',
     date: appointment?.date ?? defaultDate,
@@ -108,6 +119,7 @@ export function NewAppointmentModal({
       status: appointment?.status ?? 'confirme',
       category: form.category || inferCategory(motif),
     })
+    toast.success(t('toast.appointmentSaved'))
   }
 
   return createPortal(
@@ -121,13 +133,14 @@ export function NewAppointmentModal({
       <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-slate-900">{editing ? t('agenda.edit') : t('agenda.new')}</h2>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-xs font-medium text-slate-600">
-            {t('agenda.patient')}
-            <select
+          <div className="col-span-2 space-y-2">
+            <PatientPicker
+              patients={patients}
               value={form.patientId}
-              onChange={(e) => {
-                const value = e.target.value
-                const patient = patients.find((p) => p.id === value)
+              label={t('agenda.patient')}
+              required
+              specialOptions={[{ value: NEW_PATIENT, label: t('agenda.addPatient') }]}
+              onChange={(value, patient) => {
                 setForm({
                   ...form,
                   patientId: value,
@@ -136,20 +149,17 @@ export function NewAppointmentModal({
                   phone: patient?.phone ?? form.phone,
                 })
               }}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
-              required
-            >
-              <option value="" disabled>
-                {t('agenda.choosePatient')}
-              </option>
-              <option value={NEW_PATIENT}>{t('agenda.addPatient')}</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.lastName} {p.firstName} — {p.phone}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+            {selected && !isNewPatient ? (
+              <Link
+                to={`/patients/${selected.id}`}
+                state={{ returnTo: '/agenda', returnLabel: t('nav.agenda') }}
+                className="inline-flex text-xs font-medium text-clinic-700 hover:underline"
+              >
+                {t('nav.openPatientChart')}
+              </Link>
+            ) : null}
+          </div>
           {isNewPatient && (
             <>
               <label className="block text-xs font-medium text-slate-600">

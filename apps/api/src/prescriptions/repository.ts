@@ -25,6 +25,7 @@ export class PrescriptionRepository {
     patientId: string,
     patientName: string,
     data: CreatePrescriptionInput,
+    identity?: { patientBirthDate?: string | null; patientAge?: number | null },
   ): Promise<PrescriptionWithLines> {
     return this.prisma.$transaction(async (tx) => {
       const rx = await tx.prescription.create({
@@ -33,6 +34,8 @@ export class PrescriptionRepository {
           organizationId: scope.organizationId,
           patientId,
           patientName,
+          patientBirthDate: identity?.patientBirthDate ?? null,
+          patientAge: identity?.patientAge ?? null,
           date: parseCalendarDate(data.date),
           title: data.title,
           templateId: data.templateId,
@@ -68,6 +71,45 @@ export class PrescriptionRepository {
     const where: Prisma.PrescriptionWhereInput = {
       organizationId: scope.organizationId,
       patientId,
+      ...(query.date ? { date: parseCalendarDate(query.date) } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { title: { contains: query.q, mode: 'insensitive' } },
+              { patientName: { contains: query.q, mode: 'insensitive' } },
+              {
+                lines: {
+                  some: {
+                    drug: { contains: query.q, mode: 'insensitive' },
+                    organizationId: scope.organizationId,
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.prescription.count({ where }),
+      this.prisma.prescription.findMany({
+        where,
+        include: { lines: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    return { items, total };
+  }
+
+  async listForOrganization(
+    scope: TenantScope,
+    query: ListPrescriptionsQuery,
+  ): Promise<{ items: PrescriptionWithLines[]; total: number }> {
+    const where: Prisma.PrescriptionWhereInput = {
+      organizationId: scope.organizationId,
       ...(query.date ? { date: parseCalendarDate(query.date) } : {}),
       ...(query.q
         ? {
@@ -169,6 +211,11 @@ export class PrescriptionRepository {
         posology: line.posology,
         duration: line.duration,
         notes: line.notes,
+        medicationId: line.medicationId ?? null,
+        dci: line.dci ?? null,
+        form: line.form ?? null,
+        dosage: line.dosage ?? null,
+        quantity: line.quantity ?? null,
         sortOrder: index,
       })),
     });

@@ -59,6 +59,7 @@ function storePath() {
 function defaultStore() {
   return {
     clinic: null,
+    branding: { logo: '', adminPhoto: '' },
     zoomFactor: DEFAULT_ZOOM,
   }
 }
@@ -231,7 +232,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
+      webSecurity: true,
       zoomFactor: initialZoom,
     },
   })
@@ -322,10 +324,38 @@ app.whenReady().then(() => {
       // Do not persist cloud UUIDs into Legacy store — strip common cloud id shapes if present
       // by refusing wholesale clinic replacement from renderer when Cloud is primary.
       // Local Legacy recovery still works with APP_MODE=LEGACY.
+      // Branding (logo / admin photo) still persists via branding:set.
       return { ok: false, code: 'CLOUD_MODE', message: 'Legacy clinic JSON is read-only in Cloud mode' }
     }
     const store = readStore()
     store.clinic = clinic
+    // Keep branding mirror in sync when Legacy clinic settings include images.
+    if (clinic && clinic.settings && typeof clinic.settings === 'object') {
+      store.branding = {
+        logo: typeof clinic.settings.logo === 'string' ? clinic.settings.logo : '',
+        adminPhoto: typeof clinic.settings.adminPhoto === 'string' ? clinic.settings.adminPhoto : '',
+      }
+    }
+    writeStore(store)
+    return { ok: true }
+  })
+
+  /** Branding assets — writable in Legacy AND Cloud (clinic:set is blocked in Cloud). */
+  ipcMain.handle('branding:get', () => {
+    const store = readStore()
+    const b = store.branding && typeof store.branding === 'object' ? store.branding : {}
+    return {
+      logo: typeof b.logo === 'string' ? b.logo : '',
+      adminPhoto: typeof b.adminPhoto === 'string' ? b.adminPhoto : '',
+    }
+  })
+
+  ipcMain.handle('branding:set', (_event, branding) => {
+    const store = readStore()
+    store.branding = {
+      logo: branding && typeof branding.logo === 'string' ? branding.logo : '',
+      adminPhoto: branding && typeof branding.adminPhoto === 'string' ? branding.adminPhoto : '',
+    }
     writeStore(store)
     return { ok: true }
   })

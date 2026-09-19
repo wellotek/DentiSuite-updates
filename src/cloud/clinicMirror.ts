@@ -3,6 +3,7 @@
  * Maps Railway API payloads → Legacy UI types (Zustand only — never saveClinic).
  */
 import { seedClinic } from '../data/seed'
+import { applyBrandingToSettings, loadBrandingAssets } from '../lib/brandingStorage'
 import type {
   Appointment,
   AppointmentCategory,
@@ -23,14 +24,20 @@ import type {
 } from '../types'
 import { listAppointments, type CloudAppointment } from './modules/appointments'
 import { listInvoices, type CloudInvoice } from './modules/billing'
-import { listConsultations, listTreatments, type CloudConsultation, type CloudTreatment } from './modules/clinical'
+import {
+  listOrgConsultations,
+  listOrgTreatments,
+  type CloudConsultation,
+  type CloudTreatment,
+} from './modules/clinical'
 import { listDentists, type CloudDentist } from './modules/dentists'
-import { listMedia, type CloudMedia } from './modules/media'
+import { listOrgMedia, type CloudMedia } from './modules/media'
 import { listCloudPatients, type CloudPatient } from './modules/patients'
-import { listPrescriptions, type CloudPrescription } from './modules/prescriptions'
+import { listOrgPrescriptions, type CloudPrescription } from './modules/prescriptions'
 import { listProstheses, type CloudProsthesis } from './modules/prostheses'
 import { listStock, type CloudStockItem } from './modules/stock'
 import { useAppStore } from '../store/useAppStore'
+import { fetchAllPages } from './fetchAllPages'
 
 export function mapCloudPatientToStore(p: CloudPatient): Patient {
   return {
@@ -39,12 +46,15 @@ export function mapCloudPatientToStore(p: CloudPatient): Patient {
     lastName: p.lastName,
     phone: p.phone,
     age: p.age,
+    birthDate: p.birthDate ?? null,
     address: p.address || '',
     antecedents: p.antecedents || 'Aucun',
     hasAllergies: Boolean(p.hasAllergies),
     dentistId: p.dentistId || undefined,
     teeth: {},
     notes: p.notes || undefined,
+    updatedAt: p.updatedAt || undefined,
+    archivedAt: p.archivedAt || p.deletedAt || undefined,
   }
 }
 
@@ -154,7 +164,9 @@ export function mapCloudPrescriptionToStore(
   return {
     id: rx.id,
     patientId: rx.patientId,
-    patientName,
+    patientName: rx.patientName || patientName,
+    patientBirthDate: rx.patientBirthDate ?? null,
+    patientAge: rx.patientAge ?? null,
     date: rx.date,
     title: rx.title || 'Ordonnance',
     lines: (rx.lines || []).map((l) => ({
@@ -163,6 +175,11 @@ export function mapCloudPrescriptionToStore(
       posology: l.posology,
       duration: l.duration,
       notes: l.notes || '',
+      medicationId: l.medicationId || undefined,
+      dci: l.dci || undefined,
+      form: l.form || undefined,
+      dosage: l.dosage || undefined,
+      quantity: l.quantity || undefined,
     })),
     advice: rx.advice || '',
     dentistId: rx.dentistId || undefined,
@@ -184,47 +201,54 @@ export function mapCloudMediaToStore(m: CloudMedia): PatientMedia {
   }
 }
 
-async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R[]>): Promise<R[]> {
-  const out: R[] = []
-  let i = 0
-  async function worker() {
-    while (i < items.length) {
-      const idx = i++
-      const chunk = await fn(items[idx]!)
-      out.push(...chunk)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) || 1 }, () => worker()))
-  return out
-}
-
 export async function fetchClinicMirror(options?: {
   organizationName?: string
   phone?: string
   city?: string
 }): Promise<ClinicState> {
-  /** API list schemas cap limit at 100 — higher values 400 and abort the whole hydrate. */
+  /** API list schemas cap limit at 100 — page through until complete. */
   const lim = 100
 
-  async function safeList<T>(label: string, fn: () => Promise<{ items: T[] }>): Promise<T[]> {
+  async function safeAllPages<T extends { id?: string }>(
+    label: string,
+    fetchPage: (q: Record<string, string | number | undefined>) => Promise<{
+      items: T[]
+      totalPages?: number
+      total?: number
+    }>,
+    baseQuery: Record<string, string | number | undefined> = {},
+  ): Promise<T[]> {
     try {
-      const res = await fn()
-      return res.items || []
+      return await fetchAllPages(fetchPage, baseQuery, { limit: lim, label })
     } catch (err) {
       console.warn(`[clinicMirror] ${label} skipped:`, err)
       return []
     }
   }
 
-  const [patientItems, appointmentItems, dentistItems, invoiceItems, stockItems, prosthesisItems] =
-    await Promise.all([
-      safeList('patients', () => listCloudPatients({ page: 1, limit: lim })),
-      safeList('appointments', () => listAppointments({ page: 1, limit: lim })),
-      safeList('dentists', () => listDentists({ page: 1, limit: lim })),
-      safeList('invoices', () => listInvoices({ page: 1, limit: lim })),
-      safeList('stock', () => listStock({ page: 1, limit: lim })),
-      safeList('prostheses', () => listProstheses({ page: 1, limit: lim })),
-    ])
+  const [
+    patientItems,
+    appointmentItems,
+    dentistItems,
+    invoiceItems,
+    stockItems,
+    prosthesisItems,
+    treatmentItems,
+    consultationItems,
+    prescriptionItems,
+    mediaItems,
+  ] = await Promise.all([
+    safeAllPages('patients', (q) => listCloudPatients(q)),
+    safeAllPages('appointments', (q) => listAppointments(q)),
+    safeAllPages('dentists', (q) => listDentists(q)),
+    safeAllPages('invoices', (q) => listInvoices(q)),
+    safeAllPages('stock', (q) => listStock(q)),
+    safeAllPages('prostheses', (q) => listProstheses(q)),
+    safeAllPages('treatments', (q) => listOrgTreatments(q)),
+    safeAllPages('consultations', (q) => listOrgConsultations(q)),
+    safeAllPages('prescriptions', (q) => listOrgPrescriptions(q)),
+    safeAllPages('media', (q) => listOrgMedia(q)),
+  ])
 
   const patients = patientItems.map(mapCloudPatientToStore)
   const nameById = new Map(patients.map((p) => [p.id, `${p.firstName} ${p.lastName}`]))
@@ -245,40 +269,13 @@ export async function fetchClinicMirror(options?: {
     return mapped
   })
 
-  const patientIds = patients.map((p) => p.id)
-  const treatments = await mapPool(patientIds, 4, async (patientId) => {
-    try {
-      const list = await listTreatments(patientId, { limit: lim })
-      return list.items.map(mapCloudTreatmentToStore)
-    } catch {
-      return []
-    }
-  })
-  const sessions = await mapPool(patientIds, 4, async (patientId) => {
-    try {
-      const list = await listConsultations(patientId, { limit: lim })
-      return list.items.map(mapCloudConsultationToSession)
-    } catch {
-      return []
-    }
-  })
-  const prescriptions = await mapPool(patientIds, 4, async (patientId) => {
-    try {
-      const list = await listPrescriptions(patientId, { limit: lim })
-      const pname = nameById.get(patientId) || ''
-      return list.items.map((rx) => mapCloudPrescriptionToStore(rx, pname))
-    } catch {
-      return []
-    }
-  })
-  const mediaFiles = await mapPool(patientIds, 4, async (patientId) => {
-    try {
-      const list = await listMedia(patientId, { limit: lim })
-      return list.items.map(mapCloudMediaToStore)
-    } catch {
-      return []
-    }
-  })
+  const treatments = treatmentItems.map(mapCloudTreatmentToStore)
+  const sessions = consultationItems.map(mapCloudConsultationToSession)
+  const prescriptions = prescriptionItems.map((rx) =>
+    mapCloudPrescriptionToStore(rx, nameById.get(rx.patientId) || ''),
+  )
+  /** Media metadata only (no binary bytes). */
+  const mediaFiles = mediaItems.map(mapCloudMediaToStore)
 
   const orgName = options?.organizationName?.trim()
   const settings = {
@@ -304,12 +301,17 @@ export async function fetchClinicMirror(options?: {
     prescriptions,
     settings,
     actCatalog: seedClinic.actCatalog,
+    medicationCatalog: useAppStore.getState().clinic.medicationCatalog ?? [],
   }
 }
 
 /** Replace in-memory clinic (Cloud mode). Never touches local JSON. */
-export function applyClinicMirror(clinic: ClinicState) {
-  useAppStore.getState().replaceClinicMirror(clinic)
+export async function applyClinicMirror(clinic: ClinicState) {
+  const branding = await loadBrandingAssets()
+  useAppStore.getState().replaceClinicMirror({
+    ...clinic,
+    settings: applyBrandingToSettings(clinic.settings, branding),
+  })
 }
 
 export async function hydrateClinicMirror(options?: {
@@ -318,6 +320,6 @@ export async function hydrateClinicMirror(options?: {
   city?: string
 }) {
   const clinic = await fetchClinicMirror(options)
-  applyClinicMirror(clinic)
+  await applyClinicMirror(clinic)
   return clinic
 }

@@ -133,6 +133,26 @@ export function createMediaRoutes(deps: MediaRouteDeps) {
     },
   );
 
+  routes.get('/media', requireAuth, requireTenant, requireRead, async (c) => {
+    const query = listMediaQuerySchema.safeParse({
+      kind: c.req.query('kind') || undefined,
+      page: c.req.query('page') ?? '1',
+      limit: c.req.query('limit') ?? '50',
+    });
+    if (!query.success) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        query.error.issues[0]?.message ?? 'Invalid query',
+      );
+    }
+    const result = await deps.mediaService.listForOrganization(
+      tenantScope(c),
+      query.data,
+    );
+    return c.json({ ok: true as const, ...result });
+  });
+
   routes.get('/media/:id', requireAuth, requireTenant, requireRead, async (c) => {
     const media = await deps.mediaService.get(tenantScope(c), c.req.param('id'));
     return c.json({ ok: true as const, media });

@@ -94,6 +94,7 @@ export function createApp(deps: AppDeps): Hono {
     createOrganizationRoutes({
       authService,
       organizationService,
+      config: deps.config,
     }),
   );
   app.route(

@@ -22,10 +22,13 @@ import type {
   Treatment,
 } from '../types'
 import { loadClinic, saveClinic } from '../lib/storage'
+import { saveBrandingAssets } from '../lib/brandingStorage'
 import { activateLicense as activateLicenseRequest, loadLicenseStatus, retryLicense as retryLicenseRequest } from '../lib/license'
 import type { LicenseStatus } from '../types'
 import { dentistName } from '../lib/dentists'
-import { seedClinic } from '../data/seed'
+import { CLINIC_SCHEMA_VERSION, seedClinic } from '../data/seed'
+import type { MedicationItem } from '../types'
+import { mergeMedicationCatalog } from '../lib/medications'
 import { toothStatusForCare } from '../data/acts'
 import { toISODate } from '../lib/agenda'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
@@ -35,6 +38,7 @@ import {
   deleteCloudPatient,
   updateCloudPatient,
 } from '../cloud/modules/patients'
+import { cloudApi } from '../cloud/api'
 import {
   createAppointment as createCloudAppointment,
   deleteAppointment as deleteCloudAppointment,
@@ -122,7 +126,7 @@ function patientDisplayName(clinic: ClinicState, patientId: string) {
 }
 
 const emptyClinic = (): ClinicState => ({
-  schemaVersion: 8,
+  schemaVersion: CLINIC_SCHEMA_VERSION,
   patients: [],
   appointments: [],
   prostheses: [],
@@ -131,6 +135,7 @@ const emptyClinic = (): ClinicState => ({
   dentists: [],
   settings: seedClinic.settings,
   actCatalog: seedClinic.actCatalog,
+  medicationCatalog: [],
   stockItems: [],
   sessions: [],
   mediaFiles: [],
@@ -151,6 +156,7 @@ interface AppStore {
   addPatient: (patient: PatientDraft) => string
   updatePatient: (id: string, patient: PatientDraft) => void
   deletePatient: (id: string) => void
+  restorePatient: (id: string) => void
   setToothStatus: (patientId: string, tooth: string, status: ToothStatus, note?: string) => void
   addTreatment: (treatment: Omit<Treatment, 'id'>, syncTooth?: boolean) => void
   updateTreatment: (id: string, patch: Partial<Treatment>) => void
@@ -175,6 +181,8 @@ interface AppStore {
   updateDentist: (id: string, draft: DentistDraft) => void
   deleteDentist: (id: string) => void
   updateSettings: (patch: Partial<ClinicSettings>) => void
+  upsertMedication: (item: MedicationItem) => void
+  setMedicationStatus: (id: string, status: MedicationItem['status']) => void
   addAppointment: (draft: AppointmentDraft) => void
   updateAppointment: (id: string, patch: Partial<AppointmentDraft>) => void
   deleteAppointment: (id: string) => void
@@ -241,7 +249,17 @@ export const useAppStore = create<AppStore>((set, get) => {
     },
 
     replaceClinicMirror: (clinic) => {
-      set({ clinic })
+      const prevSettings = get().clinic.settings
+      set({
+        clinic: {
+          ...clinic,
+          settings: {
+            ...clinic.settings,
+            logo: clinic.settings.logo || prevSettings.logo || '',
+            adminPhoto: clinic.settings.adminPhoto || prevSettings.adminPhoto || '',
+          },
+        },
+      })
     },
 
     addPatientCloud: async (patient) => {
@@ -250,6 +268,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         lastName: patient.lastName,
         phone: patient.phone,
         age: patient.age,
+        birthDate: patient.birthDate || null,
         address: patient.address || '',
         antecedents: patient.antecedents || 'Aucun',
         hasAllergies: Boolean(patient.hasAllergies),
@@ -349,36 +368,55 @@ export const useAppStore = create<AppStore>((set, get) => {
           lastName: patient.lastName,
           phone: patient.phone,
           age: patient.age,
+          birthDate: patient.birthDate || null,
           address: patient.address || '',
           antecedents: patient.antecedents || 'Aucun',
           hasAllergies: Boolean(patient.hasAllergies),
           dentistId: patient.dentistId || null,
           notes: patient.notes || null,
-        }).catch(() => undefined)
+          expectedUpdatedAt: previous?.updatedAt,
+        }).catch((err) => {
+          console.warn('[updatePatient] cloud conflict or error:', err)
+        })
       }
     },
 
     deletePatient: (id) => {
       const clinic = get().clinic
       const previous = clinic.patients.find((p) => p.id === id)
-      const name = previous ? `${previous.firstName} ${previous.lastName}` : ''
+      const archivedAt = new Date().toISOString()
+      // Soft-archive: keep clinical history in store; hide from active lists.
       persist({
         ...clinic,
-        patients: clinic.patients.filter((p) => p.id !== id),
-        appointments: clinic.appointments.filter((a) => a.patientId !== id),
-        treatments: (clinic.treatments ?? []).filter((t) => t.patientId !== id),
-        prostheses: clinic.prostheses.filter((pr) => pr.patientId !== id),
-        sessions: (clinic.sessions ?? []).filter((s) => s.patientId !== id),
-        mediaFiles: (clinic.mediaFiles ?? []).filter((m) => m.patientId !== id),
-        invoices: clinic.invoices.filter((inv) =>
-          inv.patientId ? inv.patientId !== id : inv.patientName !== name,
-        ),
-        prescriptions: (clinic.prescriptions ?? []).filter((rx) =>
-          rx.patientId ? rx.patientId !== id : rx.patientName !== name,
+        patients: clinic.patients.map((p) =>
+          p.id === id ? { ...p, archivedAt, archivedBy: null } : p,
         ),
       })
       if (isCloudClinicMode()) {
-        void deleteCloudPatient(id).catch(() => undefined)
+        void deleteCloudPatient(id)
+          .then(() => undefined)
+          .catch(() => {
+            // Rollback archive on failure
+            if (!previous) return
+            persist({
+              ...get().clinic,
+              patients: get().clinic.patients.map((p) =>
+                p.id === id ? { ...p, archivedAt: null, archivedBy: null } : p,
+              ),
+            })
+          })
+      }
+    },
+
+    restorePatient: (id) => {
+      persist({
+        ...get().clinic,
+        patients: get().clinic.patients.map((p) =>
+          p.id === id ? { ...p, archivedAt: null, archivedBy: null } : p,
+        ),
+      })
+      if (isCloudClinicMode()) {
+        void cloudApi({ method: 'POST', path: `/patients/${id}/restore` }).catch(() => undefined)
       }
     },
 
@@ -695,9 +733,46 @@ export const useAppStore = create<AppStore>((set, get) => {
     },
 
     updateSettings: (patch) => {
-      persist({
+      const next = {
         ...get().clinic,
         settings: { ...get().clinic.settings, ...patch },
+      }
+      persist(next)
+      if (patch.logo !== undefined || patch.adminPhoto !== undefined) {
+        void saveBrandingAssets({
+          logo: next.settings.logo,
+          adminPhoto: next.settings.adminPhoto,
+        }).catch(() => undefined)
+      }
+    },
+
+    upsertMedication: (item) => {
+      const catalog = get().clinic.medicationCatalog ?? []
+      const exists = catalog.some((m) => m.id === item.id)
+      persist({
+        ...get().clinic,
+        medicationCatalog: exists
+          ? catalog.map((m) => (m.id === item.id ? item : m))
+          : [...catalog, item],
+      })
+    },
+
+    setMedicationStatus: (id, status) => {
+      const catalog = get().clinic.medicationCatalog ?? []
+      const existing = catalog.find((m) => m.id === id)
+      if (existing) {
+        persist({
+          ...get().clinic,
+          medicationCatalog: catalog.map((m) => (m.id === id ? { ...m, status } : m)),
+        })
+        return
+      }
+      // Soft-disable a seed med by cloning into clinic catalog
+      const fromSeed = mergeMedicationCatalog([]).find((m) => m.id === id)
+      if (!fromSeed) return
+      persist({
+        ...get().clinic,
+        medicationCatalog: [...catalog, { ...fromSeed, status }],
       })
     },
 

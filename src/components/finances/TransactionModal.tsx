@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import type { Invoice, InvoiceDraft, Patient } from '../../types'
 import { toISODate } from '../../lib/agenda'
 import { useT } from '../../i18n'
+import { PatientPicker } from '../patients/PatientPicker'
+import { useToast } from '../ui/Toast'
 
 interface Props {
   patients: Patient[]
@@ -24,6 +26,7 @@ export function TransactionModal({
   onSave,
 }: Props) {
   const t = useT()
+  const toast = useToast()
   const editing = Boolean(initial)
   const [form, setForm] = useState({
     patientId: initial?.patientId || patients.find((p) => `${p.firstName} ${p.lastName}` === initial?.patientName)?.id || (initial ? WALK_IN : patients[0]?.id || WALK_IN),
@@ -61,6 +64,7 @@ export function TransactionModal({
       amount,
       paid: form.paid,
     })
+    toast.success(t('toast.invoiceSaved'))
   }
 
   return createPortal(
@@ -76,21 +80,15 @@ export function TransactionModal({
           {editing ? t('finances.editTx') : t('finances.addTx')}
         </h2>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-xs font-medium text-slate-600">
-            {t('finances.patient')}
-            <select
+          <div className="col-span-2">
+            <PatientPicker
+              patients={patients}
               value={form.patientId}
-              onChange={(e) => setForm({ ...form, patientId: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
-            >
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.firstName} {p.lastName}
-                </option>
-              ))}
-              <option value={WALK_IN}>{t('finances.walkIn')}</option>
-            </select>
-          </label>
+              label={t('finances.patient')}
+              specialOptions={[{ value: WALK_IN, label: t('finances.walkIn') }]}
+              onChange={(patientId) => setForm({ ...form, patientId })}
+            />
+          </div>
           {form.patientId === WALK_IN && (
             <label className="col-span-2 block text-xs font-medium text-slate-600">
               {t('finances.patientName')}

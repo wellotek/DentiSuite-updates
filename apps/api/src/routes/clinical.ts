@@ -130,6 +130,27 @@ export function createClinicalRoutes(deps: ClinicalRouteDeps) {
     },
   );
 
+  // —— Org-wide bulk lists (hydrate) — must be registered before /:id ——
+  routes.get('/consultations', requireAuth, requireTenant, requireRead, async (c) => {
+    const query = listConsultationsQuerySchema.safeParse({
+      date: c.req.query('date') || undefined,
+      page: c.req.query('page') ?? '1',
+      limit: c.req.query('limit') ?? '50',
+    });
+    if (!query.success) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        query.error.issues[0]?.message ?? 'Invalid query',
+      );
+    }
+    const result = await deps.clinicalCareService.listConsultationsForOrganization(
+      tenantScope(c),
+      query.data,
+    );
+    return c.json({ ok: true as const, ...result });
+  });
+
   routes.get(
     '/consultations/:id',
     requireAuth,
@@ -225,6 +246,28 @@ export function createClinicalRoutes(deps: ClinicalRouteDeps) {
       return c.json({ ok: true as const, treatment }, 201);
     },
   );
+
+  routes.get('/treatments', requireAuth, requireTenant, requireRead, async (c) => {
+    const query = listTreatmentsQuerySchema.safeParse({
+      date: c.req.query('date') || undefined,
+      careStatus: c.req.query('careStatus') || undefined,
+      paymentStatus: c.req.query('paymentStatus') || undefined,
+      page: c.req.query('page') ?? '1',
+      limit: c.req.query('limit') ?? '50',
+    });
+    if (!query.success) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        query.error.issues[0]?.message ?? 'Invalid query',
+      );
+    }
+    const result = await deps.clinicalCareService.listTreatmentsForOrganization(
+      tenantScope(c),
+      query.data,
+    );
+    return c.json({ ok: true as const, ...result });
+  });
 
   routes.get(
     '/treatments/:id',

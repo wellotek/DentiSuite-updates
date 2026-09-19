@@ -469,7 +469,7 @@ describe('prescription cloud API (Phase 5D)', () => {
     ).toBe(403);
   });
 
-  it('patient hard-delete cascades prescriptions + lines', async () => {
+  it('patient purge cascades prescriptions + lines', async () => {
     const orgA = await bootstrapOrg('rx-cascade@example.com');
     const patient = await createPatient(orgA.app, orgA.user.token);
     const created = await orgA.app.request(
@@ -487,8 +487,26 @@ describe('prescription cloud API (Phase 5D)', () => {
 
     expect(
       (
+        await orgA.app.request(`/patients/${patient.id}/purge`, {
+          method: 'POST',
+          headers: authHeader(orgA.user.token),
+        })
+      ).status,
+    ).toBe(409);
+
+    expect(
+      (
         await orgA.app.request(`/patients/${patient.id}`, {
           method: 'DELETE',
+          headers: authHeader(orgA.user.token),
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await orgA.app.request(`/patients/${patient.id}/purge`, {
+          method: 'POST',
           headers: authHeader(orgA.user.token),
         })
       ).status,

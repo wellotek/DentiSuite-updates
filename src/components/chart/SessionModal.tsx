@@ -1,8 +1,9 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import type { PatientSession } from '../../types'
 import { LOWER_TEETH, UPPER_TEETH, COMMON_ACTS } from '../../data/teeth'
 import { toISODate } from '../../lib/agenda'
 import { useT } from '../../i18n'
+import { clearDraft, loadDraft, saveDraft } from '../../lib/drafts'
 
 interface Props {
   patientId: string
@@ -11,17 +12,45 @@ interface Props {
   onSave: (draft: Omit<PatientSession, 'id'>) => void
 }
 
+type SessionForm = {
+  date: string
+  time: string
+  teeth: string[]
+  acts: string
+  notes: string
+  prescription: string
+}
+
 export function SessionModal({ patientId, initial, onClose, onSave }: Props) {
   const t = useT()
   const now = new Date()
-  const [form, setForm] = useState({
-    date: initial?.date ?? toISODate(now),
-    time: initial?.time ?? `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
-    teeth: initial?.teeth ?? [],
-    acts: initial?.acts ?? '',
-    notes: initial?.notes ?? '',
-    prescription: initial?.prescription ?? '',
+  const draftKey = initial?.id || `new-${patientId}`
+  const [form, setForm] = useState<SessionForm>(() => {
+    const saved = loadDraft<SessionForm>('session', draftKey)
+    if (saved?.data) return saved.data
+    return {
+      date: initial?.date ?? toISODate(now),
+      time:
+        initial?.time ??
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+      teeth: initial?.teeth ?? [],
+      acts: initial?.acts ?? '',
+      notes: initial?.notes ?? '',
+      prescription: initial?.prescription ?? '',
+    }
   })
+  const [draftHint, setDraftHint] = useState(() =>
+    loadDraft('session', draftKey) ? 'Brouillon récupéré' : '',
+  )
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      saveDraft('session', draftKey, form)
+      setDraftHint('Enregistrement automatique…')
+      window.setTimeout(() => setDraftHint('Enregistré (brouillon local)'), 400)
+    }, 800)
+    return () => window.clearTimeout(id)
+  }, [form, draftKey])
 
   function toggleTooth(n: string) {
     setForm((current) => ({
@@ -41,14 +70,18 @@ export function SessionModal({ patientId, initial, onClose, onSave }: Props) {
       notes: form.notes.trim(),
       prescription: form.prescription.trim(),
     })
+    clearDraft('session', draftKey)
   }
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
       <form onSubmit={submit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-900">
-          {initial ? t('chart.sessionEdit') : t('chart.sessionNew')}
-        </h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {initial ? t('chart.sessionEdit') : t('chart.sessionNew')}
+          </h2>
+          {draftHint ? <p className="text-[11px] text-slate-400">{draftHint}</p> : null}
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="block text-xs font-medium text-slate-600">
             {t('agenda.date')}

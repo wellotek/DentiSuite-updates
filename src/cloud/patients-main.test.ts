@@ -77,12 +77,19 @@ describe('electron cloud patients (Phase 8A)', () => {
     expect(JSON.stringify(mapped)).not.toMatch(/token/i)
   })
 
-  it('assertPatientsReadOnly blocks POST/PATCH/DELETE on generic path', () => {
+  it('assertPatientsReadOnly blocks create/update via generic path; soft-archive DELETE allowed', () => {
     const { assertPatientsReadOnly } = loadPatientsModule()
     expect(() => assertPatientsReadOnly('GET', '/patients')).not.toThrow()
     expect(() => assertPatientsReadOnly('POST', '/patients')).toThrow(/cloud:patients:create/i)
-    expect(() => assertPatientsReadOnly('PATCH', '/patients/x')).toThrow(/cloud:patients:update/i)
-    expect(() => assertPatientsReadOnly('DELETE', '/patients/x')).toThrow(/DELETE blocked/i)
+    expect(() =>
+      assertPatientsReadOnly('PATCH', '/patients/f0778efe-2277-4f75-ba3a-c0f8d4c5c026'),
+    ).toThrow(/cloud:patients:update/i)
+    expect(() =>
+      assertPatientsReadOnly('DELETE', '/patients/f0778efe-2277-4f75-ba3a-c0f8d4c5c026'),
+    ).not.toThrow()
+    expect(() =>
+      assertPatientsReadOnly('POST', '/patients/f0778efe-2277-4f75-ba3a-c0f8d4c5c026/consultations'),
+    ).not.toThrow()
   })
 
   it('normalizeCreateInput strips orgId and validates required fields', () => {

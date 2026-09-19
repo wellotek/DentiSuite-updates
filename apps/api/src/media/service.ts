@@ -129,6 +129,17 @@ export class PatientMediaService {
     };
   }
 
+  async listForOrganization(scope: TenantScope, query: ListMediaQuery) {
+    const { items, total } = await this.media.listForOrganization(scope, query);
+    return {
+      items: items.map((i) => this.toPublic(i)),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit) || 1),
+    };
+  }
+
   async get(scope: TenantScope, id: string): Promise<PublicMedia> {
     const row = await this.media.findById(scope, id);
     if (!row) {

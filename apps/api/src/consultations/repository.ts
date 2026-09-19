@@ -65,6 +65,29 @@ export class ClinicalSessionRepository {
     return { items, total };
   }
 
+  /** Org-wide list — tenant from scope only (no client organizationId). */
+  async listForOrganization(
+    scope: TenantScope,
+    query: ListConsultationsQuery,
+  ): Promise<{ items: ClinicalSession[]; total: number }> {
+    const where: Prisma.ClinicalSessionWhereInput = {
+      organizationId: scope.organizationId,
+      ...(query.date ? { date: parseCalendarDate(query.date) } : {}),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.clinicalSession.count({ where }),
+      this.prisma.clinicalSession.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { time: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    return { items, total };
+  }
+
   async update(
     scope: TenantScope,
     id: string,
@@ -142,6 +165,30 @@ export class TreatmentRepository {
     const where: Prisma.TreatmentWhereInput = {
       organizationId: scope.organizationId,
       patientId,
+      ...(query.date ? { date: parseCalendarDate(query.date) } : {}),
+      ...(query.careStatus ? { careStatus: query.careStatus } : {}),
+      ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.treatment.count({ where }),
+      this.prisma.treatment.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    return { items, total };
+  }
+
+  async listForOrganization(
+    scope: TenantScope,
+    query: ListTreatmentsQuery,
+  ): Promise<{ items: Treatment[]; total: number }> {
+    const where: Prisma.TreatmentWhereInput = {
+      organizationId: scope.organizationId,
       ...(query.date ? { date: parseCalendarDate(query.date) } : {}),
       ...(query.careStatus ? { careStatus: query.careStatus } : {}),
       ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),

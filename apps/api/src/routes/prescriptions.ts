@@ -127,6 +127,27 @@ export function createPrescriptionRoutes(deps: PrescriptionRouteDeps) {
     },
   );
 
+  routes.get('/prescriptions', requireAuth, requireTenant, requireRead, async (c) => {
+    const query = listPrescriptionsQuerySchema.safeParse({
+      date: c.req.query('date') || undefined,
+      q: c.req.query('q') || undefined,
+      page: c.req.query('page') ?? '1',
+      limit: c.req.query('limit') ?? '50',
+    });
+    if (!query.success) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        query.error.issues[0]?.message ?? 'Invalid query',
+      );
+    }
+    const result = await deps.prescriptionService.listForOrganization(
+      tenantScope(c),
+      query.data,
+    );
+    return c.json({ ok: true as const, ...result });
+  });
+
   routes.get(
     '/prescriptions/:id',
     requireAuth,

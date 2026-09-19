@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeEmail } from './email.js';
+import { parseLicenseKeyInput } from '../organization/license-key.js';
 
 export function createPasswordSchema(minLength: number) {
   return z
@@ -48,10 +49,17 @@ export const revokeDeviceSchema = z.object({
   deviceId: z.string().uuid(),
 });
 
+const licenseKeyField = z.string().superRefine((value, ctx) => {
+  const parsed = parseLicenseKeyInput(value);
+  if (!parsed.ok) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.message });
+  }
+});
+
 export function createBootstrapOrganizationSchema(minLength: number) {
   return z
     .object({
-      licenseKey: z.string().trim().min(4).max(120),
+      licenseKey: licenseKeyField,
       organizationName: z.string().trim().min(2).max(120),
       adminEmail: z
         .string()
@@ -69,18 +77,32 @@ export function createBootstrapOrganizationSchema(minLength: number) {
         })
         .optional(),
     })
-    .transform((data) => ({
-      licenseKey: data.licenseKey.trim(),
-      organizationName: data.organizationName.trim(),
-      adminEmail: data.adminEmail,
-      adminPassword: data.adminPassword,
-      adminName: data.adminName.trim(),
-      phone: data.phone && data.phone.length > 0 ? data.phone : undefined,
-      city: data.city && data.city.length > 0 ? data.city : undefined,
-      device: data.device,
-    }));
+    .transform((data) => {
+      const parsed = parseLicenseKeyInput(data.licenseKey);
+      if (!parsed.ok) {
+        throw new Error(parsed.message);
+      }
+      return {
+        licenseKey: parsed.key,
+        organizationName: data.organizationName.trim(),
+        adminEmail: data.adminEmail,
+        adminPassword: data.adminPassword,
+        adminName: data.adminName.trim(),
+        phone: data.phone && data.phone.length > 0 ? data.phone : undefined,
+        city: data.city && data.city.length > 0 ? data.city : undefined,
+        device: data.device,
+      };
+    });
 }
 
-export const onboardingStatusQuerySchema = z.object({
-  licenseKey: z.string().trim().min(4).max(120),
-});
+export const onboardingStatusQuerySchema = z
+  .object({
+    licenseKey: licenseKeyField,
+  })
+  .transform((data) => {
+    const parsed = parseLicenseKeyInput(data.licenseKey);
+    if (!parsed.ok) {
+      throw new Error(parsed.message);
+    }
+    return { licenseKey: parsed.key };
+  });

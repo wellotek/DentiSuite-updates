@@ -11,6 +11,8 @@ const ownershipIgnored = {
   updatedAt: z.unknown().optional(),
   patientId: z.unknown().optional(),
   patientName: z.unknown().optional(),
+  patientBirthDate: z.unknown().optional(),
+  patientAge: z.unknown().optional(),
 };
 
 export const prescriptionLineInputSchema = z
@@ -20,6 +22,11 @@ export const prescriptionLineInputSchema = z
     posology: z.string().trim().max(2000).default(''),
     duration: z.string().trim().max(500).default(''),
     notes: z.string().trim().max(2000).default(''),
+    medicationId: z.string().trim().max(100).nullable().optional(),
+    dci: z.string().trim().max(200).nullable().optional(),
+    form: z.string().trim().max(100).nullable().optional(),
+    dosage: z.string().trim().max(100).nullable().optional(),
+    quantity: z.string().trim().max(100).nullable().optional(),
   })
   .strict();
 
@@ -68,6 +75,8 @@ export const updatePrescriptionSchema = z
     createdAt: z.unknown().optional(),
     updatedAt: z.unknown().optional(),
     patientName: z.unknown().optional(),
+    patientBirthDate: z.unknown().optional(),
+    patientAge: z.unknown().optional(),
   })
   .strict()
   .refine(

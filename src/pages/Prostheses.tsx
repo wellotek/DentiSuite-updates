@@ -12,6 +12,12 @@ import {
 } from '../lib/prostheses'
 import type { Prosthesis, ProsthesisStatus } from '../types'
 import { ProsthesisModal } from '../components/prostheses/ProsthesisModal'
+import {
+  ContextBackButton,
+  PatientContextBar,
+  useOptionalPatientContext,
+} from '../components/patients/PatientContextBar'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 export function Prostheses() {
   const t = useT()
@@ -23,9 +29,11 @@ export function Prostheses() {
   const updateProsthesis = useAppStore((s) => s.updateProsthesis)
   const deleteProsthesis = useAppStore((s) => s.deleteProsthesis)
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query, 200)
   const [status, setStatus] = useState<ProsthesisStatus | 'all'>('all')
   const [editing, setEditing] = useState<Prosthesis | null | 'new'>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const { patient: contextPatient } = useOptionalPatientContext(patients)
 
   const labs = useMemo(
     () => [...new Set(prostheses.map((p) => p.lab).filter(Boolean))].sort(),
@@ -33,9 +41,10 @@ export function Prostheses() {
   )
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = debouncedQuery.trim().toLowerCase()
     return [...prostheses]
       .filter((item) => {
+        if (contextPatient && item.patientId !== contextPatient.id) return false
         if (status !== 'all' && normalizeProsthesisStatus(item.status) !== status) return false
         if (!q) return true
         return (
@@ -46,7 +55,7 @@ export function Prostheses() {
         )
       })
       .sort((a, b) => b.sentAt.localeCompare(a.sentAt) || a.patientName.localeCompare(b.patientName))
-  }, [prostheses, query, status])
+  }, [prostheses, debouncedQuery, status, contextPatient])
 
   const openCount = prostheses.filter(isProsthesisOpen).length
   const fabCount = prostheses.filter((p) => normalizeProsthesisStatus(p.status) === 'fabrication').length
@@ -60,6 +69,12 @@ export function Prostheses() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
+      {contextPatient ? (
+        <div className="space-y-3">
+          <ContextBackButton />
+          <PatientContextBar patient={contextPatient} />
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t('prostheses.title')}</h1>

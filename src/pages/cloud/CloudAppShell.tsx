@@ -27,9 +27,12 @@ import { CloudAuthContext } from '../../cloud/CloudAuthContext'
 import type { CloudSessionContext } from '../../cloud/types'
 import { ActivateLicense } from '../ActivateLicense'
 import { useAppStore } from '../../store/useAppStore'
+import { CLINIC_SCHEMA_VERSION } from '../../data/seed'
 import { setCloudClinicMode } from '../../cloud/cloudClinicMode'
 import { hydrateClinicMirror } from '../../cloud/clinicMirror'
 import { CloudBanner } from './ui'
+import { ToastProvider } from '../../components/ui/Toast'
+import { GlobalSearchHost, GlobalSearchTrigger } from '../../components/search/GlobalSearch'
 
 type OnboardingStep =
   | 'CHECK_LICENSE'
@@ -74,6 +77,7 @@ function isAuthenticated(context: CloudSessionContext | null): boolean {
 
 export function CloudAppShell({ children }: { children?: ReactNode }) {
   const license = useAppStore((s) => s.license)
+  const settings = useAppStore((s) => s.clinic.settings)
   const [boot, setBoot] = useState(true)
   const [step, setStep] = useState<OnboardingStep>('CHECK_LICENSE')
   const [modeError, setModeError] = useState<string | null>(null)
@@ -266,7 +270,7 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
       await logoutCloud()
       setCloudClinicMode(false)
       replaceClinicMirror({
-        schemaVersion: 8,
+        schemaVersion: CLINIC_SCHEMA_VERSION,
         patients: [],
         appointments: [],
         prostheses: [],
@@ -275,6 +279,7 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
         dentists: [],
         settings: useAppStore.getState().clinic.settings,
         actCatalog: useAppStore.getState().clinic.actCatalog,
+        medicationCatalog: useAppStore.getState().clinic.medicationCatalog ?? [],
         stockItems: [],
         sessions: [],
         mediaFiles: [],
@@ -558,10 +563,12 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
           )}
         </div>
       ) : (
+        <ToastProvider>
         <div className="flex h-full bg-[#f4f7fa]">
+          <GlobalSearchHost />
           <aside className="relative z-30 flex w-[272px] shrink-0 flex-col bg-clinic-950 text-white">
             <div className="border-b border-white/10 px-5 py-5">
-              <Logo light name={orgLabel} tagline="Cabinet dentaire" />
+              <Logo light name={orgLabel} src={settings?.logo} tagline="Cabinet dentaire" />
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
               {NAV.filter((item) => !item.perm || permissions.includes(item.perm)).map((item) => (
@@ -583,21 +590,45 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
               ))}
             </nav>
             <div className="border-t border-white/10 p-4 space-y-2">
-              <div className="rounded-lg bg-white/5 px-3 py-2.5">
-                <p className="truncate text-sm font-medium">
-                  {context?.user?.displayName ||
-                    (context?.user?.username ? `@${context.user.username}` : null) ||
-                    context?.user?.email ||
-                    '—'}
-                </p>
-                <p className="truncate text-xs text-clinic-100/70">
-                  {[
-                    context?.user?.username ? `@${context.user.username}` : null,
-                    context?.role ?? context?.membership?.role ?? '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+              <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
+                {settings.adminPhoto ? (
+                  <img
+                    src={settings.adminPhoto}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-clinic-500 text-sm font-semibold ring-2 ring-white/20">
+                    {(
+                      context?.user?.displayName ||
+                      context?.user?.username ||
+                      context?.user?.email ||
+                      'U'
+                    )
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {context?.user?.displayName ||
+                      (context?.user?.username ? `@${context.user.username}` : null) ||
+                      context?.user?.email ||
+                      '—'}
+                  </p>
+                  <p className="truncate text-xs text-clinic-100/70">
+                    {context?.user?.email ||
+                      (context?.user?.username ? `@${context.user.username}` : '—')}
+                  </p>
+                  <p className="truncate text-[11px] text-clinic-100/55">
+                    {(() => {
+                      const role = context?.role ?? context?.membership?.role ?? ''
+                      if (role === 'ADMIN') return 'Administrateur'
+                      if (role === 'ASSISTANT') return 'Assistant'
+                      return role || '—'
+                    })()}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -611,9 +642,12 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
             </div>
           </aside>
           <div className="relative z-0 flex min-w-0 flex-1 flex-col">
-            <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
+            <header className="flex h-14 items-center justify-between gap-4 border-b border-slate-200 bg-white px-6">
               <p className="text-sm text-slate-500">{orgLabel}</p>
-              <p className="text-xs text-slate-400">DentiSuite 3.1.1</p>
+              <div className="flex items-center gap-3">
+                <GlobalSearchTrigger />
+                <p className="text-xs text-slate-400">DentiSuite Cloud</p>
+              </div>
             </header>
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-br from-clinic-50 via-[#f4f7fa] to-sky-50 p-6">
               {clinicLoading ? (
@@ -627,6 +661,7 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
             </main>
           </div>
         </div>
+        </ToastProvider>
       )}
     </CloudAuthContext.Provider>
   )

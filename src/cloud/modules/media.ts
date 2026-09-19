@@ -25,6 +25,18 @@ export async function listMedia(
   return asList(data)
 }
 
+/** Org-scoped media metadata (no R2 bytes). */
+export async function listOrgMedia(
+  query: Record<string, string | number | undefined> = {},
+) {
+  const data = await cloudApi<Partial<CloudListResult<CloudMedia>>>({
+    method: 'GET',
+    path: '/media',
+    query,
+  })
+  return asList(data)
+}
+
 export async function createMediaUpload(patientId: string, body: Record<string, unknown>) {
   return cloudApi<{
     media: CloudMedia

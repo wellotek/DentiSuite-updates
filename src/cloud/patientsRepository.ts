@@ -283,6 +283,13 @@ export function validateCloudPatientUpdate(
         : null
     hasField = true
   }
+  if (input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt != null) {
+    data.expectedUpdatedAt = String(input.expectedUpdatedAt).trim().slice(0, 64)
+  }
+  if (input.birthDate !== undefined) {
+    data.birthDate = input.birthDate
+    hasField = true
+  }
 
   if (!hasField) return { ok: false, message: 'Au moins un champ à modifier est requis' }
   return { ok: true, data }

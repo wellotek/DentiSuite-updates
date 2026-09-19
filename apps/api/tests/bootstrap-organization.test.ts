@@ -87,7 +87,7 @@ describe('auth bootstrap-organization', () => {
       organizationName: string | null;
     };
     expect(afterBody.registered).toBe(true);
-    expect(afterBody.organizationName).toBe('Cabinet Bootstrap');
+    expect(afterBody.organizationName).toBeNull();
   });
 
   it('rejects duplicate license and short password; login still works', async () => {

@@ -14,6 +14,6 @@ export const CloudAuthContext = createContext<CloudAuthContextValue | null>(null
 
 export function useCloudAuth() {
   const ctx = useContext(CloudAuthContext)
-  if (!ctx) throw new Error('useCloudAuth requires CloudLayout')
+  if (!ctx) throw new Error('useCloudAuth requires CloudAppShell')
   return ctx
 }

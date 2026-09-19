@@ -17,6 +17,11 @@ import { dentistName } from '../lib/dentists'
 import { useT } from '../i18n'
 import type { Appointment, AppointmentDraft } from '../types'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
+import {
+  ContextBackButton,
+  PatientContextBar,
+  useOptionalPatientContext,
+} from '../components/patients/PatientContextBar'
 
 export function Agenda() {
   const t = useT()
@@ -32,6 +37,7 @@ export function Agenda() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [now, setNow] = useState(() => new Date())
+  const { patient: contextPatient } = useOptionalPatientContext(patients)
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60_000)
@@ -101,6 +107,12 @@ export function Agenda() {
 
   return (
     <div className="relative isolate flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      {contextPatient ? (
+        <div className="shrink-0 space-y-2">
+          <ContextBackButton />
+          <PatientContextBar patient={contextPatient} compact />
+        </div>
+      ) : null}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t('agenda.title')}</h1>

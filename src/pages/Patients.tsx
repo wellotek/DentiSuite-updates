@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Pencil, Phone, Plus, Search, Trash2 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
@@ -8,9 +8,17 @@ import { useT } from '../i18n'
 import { dentistName } from '../lib/dentists'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
 import type { Patient } from '../types'
+import { displayAge } from '../lib/age'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { ListPagination, paginateSlice } from '../components/ui/ListPagination'
+import { EmptyState } from '../components/ui/feedback'
+import { useToast } from '../components/ui/Toast'
+
+const PAGE_SIZE = 50
 
 export function Patients() {
   const t = useT()
+  const toast = useToast()
   const navigate = useNavigate()
   const patients = useAppStore((s) => s.clinic.patients)
   const dentists = useAppStore((s) => s.clinic.dentists ?? [])
@@ -19,17 +27,36 @@ export function Patients() {
   const updatePatient = useAppStore((s) => s.updatePatient)
   const deletePatient = useAppStore((s) => s.deletePatient)
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebouncedValue(query, 200)
+  const [page, setPage] = useState(1)
   const [editing, setEditing] = useState<Patient | null | 'new'>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase().replace(/\s+/g, '')
+    const q = debouncedQuery.trim().toLowerCase().replace(/\s+/g, '')
+    const nameQ = debouncedQuery.trim().toLowerCase()
     return patients.filter((p) => {
+      if (p.archivedAt) return false
       const name = `${p.lastName} ${p.firstName}`.toLowerCase()
       const phone = p.phone.replace(/\s+/g, '')
-      return name.includes(query.trim().toLowerCase()) || phone.includes(q)
+      return name.includes(nameQ) || phone.includes(q)
     })
-  }, [patients, query])
+  }, [patients, debouncedQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedQuery])
+
+  const pageItems = useMemo(
+    () => paginateSlice(filtered, page, PAGE_SIZE),
+    [filtered, page],
+  )
+
+  const activeCount = useMemo(
+    () => patients.filter((p) => !p.archivedAt).length,
+    [patients],
+  )
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -37,7 +64,7 @@ export function Patients() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t('patients.title')}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {patients.length} {t('patients.subtitle')}
+            {activeCount} {t('patients.subtitle')}
           </p>
         </div>
         <button
@@ -73,7 +100,7 @@ export function Patients() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((p) => {
+            {pageItems.map((p) => {
               const alert = patientHasAllergies(p.antecedents, p.hasAllergies)
               return (
                 <tr
@@ -99,7 +126,12 @@ export function Patients() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
-                    {p.age} {t('patients.years')}
+                    {displayAge(p)} {t('patients.years')}
+                    {p.birthDate ? (
+                      <span className="mt-0.5 block text-[11px] text-slate-400">
+                        {p.birthDate.split('-').reverse().join('/')}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {dentists.find((d) => d.id === p.dentistId)
@@ -113,13 +145,20 @@ export function Patients() {
                         <>
                           <button
                             type="button"
+                            disabled={archiving}
                             onClick={() => {
-                              deletePatient(p.id)
-                              setConfirmId(null)
+                              setArchiving(true)
+                              try {
+                                deletePatient(p.id)
+                                toast.success(t('toast.patientArchived'))
+                              } finally {
+                                setArchiving(false)
+                                setConfirmId(null)
+                              }
                             }}
-                            className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                            className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                           >
-                            {t('common.delete')}
+                            Archiver
                           </button>
                           <button
                             type="button"
@@ -145,7 +184,7 @@ export function Patients() {
                             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                            {t('common.delete')}
+                            Archiver
                           </button>
                         </>
                       )}
@@ -156,14 +195,21 @@ export function Patients() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
-                  {t('patients.empty')}
+                <td colSpan={6} className="px-4 py-4">
+                  <EmptyState title={t('patients.empty')} />
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <ListPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={filtered.length}
+        onPageChange={setPage}
+      />
 
       {editing && (
         <NewPatientModal
@@ -175,10 +221,12 @@ export function Patients() {
                 ? await addPatientCloud(draft)
                 : addPatient(draft)
               setEditing(null)
+              toast.success(t('toast.patientSaved'))
               navigate(`/patients/${id}`)
             } else {
               updatePatient(editing.id, draft)
               setEditing(null)
+              toast.success(t('toast.patientSaved'))
             }
           }}
         />

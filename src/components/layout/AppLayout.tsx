@@ -14,6 +14,8 @@ import { useAppStore } from '../../store/useAppStore'
 import { formatClinicDate, formatClinicTime, useT } from '../../i18n'
 import { seedClinic } from '../../data/seed'
 import { useEffect, useState } from 'react'
+import { ToastProvider } from '../ui/Toast'
+import { GlobalSearchHost, GlobalSearchTrigger } from '../search/GlobalSearch'
 
 const ToothIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
@@ -45,7 +47,9 @@ export function AppLayout() {
   ]
 
   return (
+    <ToastProvider>
     <div className="flex h-full bg-[#f4f7fa]">
+      <GlobalSearchHost />
       <aside
         className="relative z-30 flex w-[272px] shrink-0 flex-col bg-clinic-950 text-white"
         onDragOver={(e) => {
@@ -81,25 +85,34 @@ export function AppLayout() {
         <div className="border-t border-white/10 p-4">
           <div className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
             {settings.adminPhoto ? (
-              <img src={settings.adminPhoto} alt="" className="h-8 w-8 rounded-full object-cover" />
+              <img
+                src={settings.adminPhoto}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+              />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-clinic-500 text-xs font-semibold">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-clinic-500 text-sm font-semibold ring-2 ring-white/20">
                 {(settings.name || 'D').slice(0, 1).toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{settings.name}</p>
+              <p className="truncate text-sm font-medium">{settings.name || 'DentiSuite'}</p>
+              <p className="truncate text-xs text-clinic-100/70">{settings.email || '—'}</p>
+              <p className="truncate text-[11px] text-clinic-100/55">Administrateur</p>
             </div>
           </div>
         </div>
       </aside>
 
       <div className="relative z-0 flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
+        <header className="flex h-14 items-center justify-between gap-4 border-b border-slate-200 bg-white px-6">
           <p className="text-sm capitalize text-slate-500">
             {formatClinicDate(now, settings)} · {formatClinicTime(now, settings)}
           </p>
-          <p className="text-xs text-slate-500">{settings.name}</p>
+          <div className="flex items-center gap-3">
+            <GlobalSearchTrigger />
+            <p className="text-xs text-slate-500">{settings.name}</p>
+          </div>
         </header>
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-br from-clinic-50 via-[#f4f7fa] to-sky-50 p-6">
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -108,5 +121,6 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+    </ToastProvider>
   )
 }

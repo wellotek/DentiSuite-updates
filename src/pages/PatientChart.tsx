@@ -1,23 +1,48 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, MapPin, Phone } from 'lucide-react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import {
+  AlertTriangle,
+  CalendarPlus,
+  FilePlus2,
+  MapPin,
+  Pencil,
+  Phone,
+  Sparkles,
+  Wallet,
+} from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { Odontogram } from '../components/odontogram/Odontogram'
 import { ActsPalette } from '../components/care/ActsPalette'
 import { CareTable } from '../components/care/CareTable'
 import { SessionTimeline } from '../components/chart/SessionTimeline'
 import { PatientImaging } from '../components/chart/PatientImaging'
+import { DentistSelect } from '../components/dentists/DentistSelect'
+import { PrescriptionEditor } from '../components/prescriptions/PrescriptionEditor'
+import { NewAppointmentModal } from '../components/agenda/NewAppointmentModal'
+import { ProsthesisModal } from '../components/prostheses/ProsthesisModal'
 import { patientHasAllergies } from '../data/teeth'
 import { dentistName } from '../lib/dentists'
-import { useT } from '../i18n'
-import type { ActItem, CareStatus } from '../types'
+import { localeTag, useT } from '../i18n'
+import type { ActItem, CareStatus, Prescription, PrescriptionDraft } from '../types'
+import { computeAgeFromBirthDate, displayAge } from '../lib/age'
+import { ContextBackButton, PatientContextBar } from '../components/patients/PatientContextBar'
+import { openFromPatient } from '../lib/patientNav'
+import { useToast } from '../components/ui/Toast'
+import { emptyPrescriptionDraft } from '../lib/prescriptions'
+import { toISODate } from '../lib/agenda'
+import { isCloudClinicMode } from '../cloud/cloudClinicMode'
+import { printPrescription } from '../lib/prescriptionReport'
 
 type ChartTab = 'soins' | 'seances' | 'imagerie'
+type ChartModal = 'rx' | 'appointment' | 'prosthesis' | null
 
 export function PatientChart() {
   const t = useT()
+  const toast = useToast()
+  const navigate = useNavigate()
   const { id } = useParams()
   const clinic = useAppStore((s) => s.clinic)
+  const updatePatient = useAppStore((s) => s.updatePatient)
   const applyCareAct = useAppStore((s) => s.applyCareAct)
   const updateTreatment = useAppStore((s) => s.updateTreatment)
   const deleteTreatment = useAppStore((s) => s.deleteTreatment)
@@ -28,12 +53,30 @@ export function PatientChart() {
   const addMedia = useAppStore((s) => s.addMedia)
   const updateMedia = useAppStore((s) => s.updateMedia)
   const deleteMedia = useAppStore((s) => s.deleteMedia)
+  const addPrescription = useAppStore((s) => s.addPrescription)
+  const addAppointment = useAppStore((s) => s.addAppointment)
+  const addAppointmentCloud = useAppStore((s) => s.addAppointmentCloud)
+  const addProsthesis = useAppStore((s) => s.addProsthesis)
   const [selectedTeeth, setSelectedTeeth] = useState<string[]>([])
   const [careStatus, setCareStatus] = useState<CareStatus>('a_faire')
   const [tab, setTab] = useState<ChartTab>('soins')
+  const [modal, setModal] = useState<ChartModal>(null)
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [infoDraft, setInfoDraft] = useState({
+    firstName: '',
+    lastName: '',
+    birthDate: '',
+    age: '',
+    phone: '',
+    address: '',
+    antecedents: '',
+    hasAllergies: false,
+    dentistId: '',
+  })
 
   const patient = clinic.patients.find((p) => p.id === id)
   const catalog = clinic.actCatalog ?? []
+  const loc = localeTag(clinic.settings?.locale ?? 'fr')
   const treatments = useMemo(
     () =>
       (clinic.treatments ?? [])
@@ -50,11 +93,63 @@ export function PatientChart() {
     [clinic.mediaFiles, id],
   )
 
+  const rxInitial = useMemo(() => {
+    if (!patient) return emptyPrescriptionDraft()
+    const d = clinic.dentists?.[0]
+    const assigned = clinic.dentists?.find((x) => x.id === patient.dentistId)
+    const name = `${patient.firstName} ${patient.lastName}`
+    return {
+      ...emptyPrescriptionDraft(),
+      patientId: patient.id,
+      patientName: name,
+      patientBirthDate: patient.birthDate || null,
+      patientAge: displayAge(patient),
+      dentistId: patient.dentistId || d?.id,
+      dentistName: assigned ? dentistName(assigned) : d ? dentistName(d) : '',
+    }
+  }, [patient, clinic.dentists])
+
   if (!patient) return <Navigate to="/patients" replace />
 
   const allergy = patientHasAllergies(patient.antecedents, patient.hasAllergies)
   const dentist = clinic.dentists.find((d) => d.id === patient.dentistId)
   const patientName = `${patient.firstName} ${patient.lastName}`
+  const activePatients = clinic.patients.filter((p) => !p.archivedAt)
+
+  function startEditInfo() {
+    setInfoDraft({
+      firstName: patient!.firstName,
+      lastName: patient!.lastName,
+      birthDate: patient!.birthDate ?? '',
+      age: String(patient!.age || ''),
+      phone: patient!.phone,
+      address: patient!.address || '',
+      antecedents: patient!.antecedents === 'Aucun' ? '' : patient!.antecedents,
+      hasAllergies: Boolean(patient!.hasAllergies),
+      dentistId: patient!.dentistId ?? '',
+    })
+    setEditingInfo(true)
+  }
+
+  function saveInfo() {
+    const antecedents = infoDraft.antecedents.trim() || 'Aucun'
+    const birthDate = infoDraft.birthDate.trim() || null
+    const age = computeAgeFromBirthDate(birthDate) ?? (Number(infoDraft.age) || 0)
+    updatePatient(patient!.id, {
+      firstName: infoDraft.firstName.trim() || patient!.firstName,
+      lastName: infoDraft.lastName.trim() || patient!.lastName,
+      birthDate,
+      age,
+      phone: infoDraft.phone.trim(),
+      address: infoDraft.address.trim(),
+      antecedents,
+      hasAllergies: infoDraft.hasAllergies || /allerg/i.test(antecedents),
+      dentistId: infoDraft.dentistId || undefined,
+      notes: patient!.notes,
+    })
+    setEditingInfo(false)
+    toast.success(t('toast.patientSaved'))
+  }
 
   function applyAct(
     act: ActItem,
@@ -73,29 +168,206 @@ export function PatientChart() {
     if (!extra?.tooth) setSelectedTeeth([])
   }
 
+  function printRx(rx: Prescription | PrescriptionDraft) {
+    const full: Prescription = 'id' in rx ? rx : { ...rx, id: 'preview' }
+    void printPrescription(full, clinic.settings, loc)
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <Link
-        to="/patients"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-clinic-800"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {t('chart.back')}
-      </Link>
+      <ContextBackButton fallbackTo="/patients" fallbackLabel={t('chart.back')} />
+
+      <PatientContextBar patient={patient} showOpenChart={false} />
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">{t('dashboard.quickActions')}</h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => setModal('rx')}
+            className="group relative flex min-h-[112px] flex-col items-start justify-between overflow-hidden rounded-2xl border border-clinic-200/70 bg-gradient-to-br from-clinic-700 via-clinic-800 to-clinic-950 p-4 text-start text-white shadow-lg shadow-clinic-900/15 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/20">
+              <FilePlus2 className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">{t('dashboard.qa.rx')}</p>
+              <p className="mt-0.5 text-[11px] text-clinic-100/75">{patientName}</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal('appointment')}
+            className="group relative flex min-h-[112px] flex-col items-start justify-between overflow-hidden rounded-2xl border border-clinic-200/70 bg-gradient-to-br from-clinic-700 via-clinic-800 to-clinic-950 p-4 text-start text-white shadow-lg shadow-clinic-900/15 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/20">
+              <CalendarPlus className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">{t('dashboard.qa.appointment')}</p>
+              <p className="mt-0.5 text-[11px] text-clinic-100/75">{patientName}</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModal('prosthesis')}
+            className="group relative flex min-h-[112px] flex-col items-start justify-between overflow-hidden rounded-2xl border border-clinic-200/70 bg-gradient-to-br from-clinic-700 via-clinic-800 to-clinic-950 p-4 text-start text-white shadow-lg shadow-clinic-900/15 transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/20">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">{t('dashboard.qa.prosthesis')}</p>
+              <p className="mt-0.5 text-[11px] text-clinic-100/75">{patientName}</p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              navigate('/finances', {
+                state: openFromPatient(patient.id, t('nav.backToPatient')),
+              })
+            }
+            className="group relative flex min-h-[112px] flex-col items-start justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-start shadow-card transition hover:-translate-y-0.5 hover:border-clinic-300 hover:shadow-md"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-clinic-50 text-clinic-800 ring-1 ring-clinic-100">
+              <Wallet className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">{t('nav.quickFinance')}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">{patientName}</p>
+            </div>
+          </button>
+        </div>
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          {patient.firstName} {patient.lastName}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {t('chart.file')} · {patient.age} {t('patients.years')}
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
-          <Info label={t('patients.phone')} value={patient.phone} icon={<Phone className="h-3.5 w-3.5 text-slate-400" />} />
-          <Info label={t('patients.address')} value={patient.address || '—'} icon={<MapPin className="h-3.5 w-3.5 text-slate-400" />} />
-          <Info label={t('patients.dentist')} value={dentist ? dentistName(dentist) : t('form.unassigned')} />
-          <Info label={t('patients.history')} value={patient.antecedents} />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              {patient.firstName} {patient.lastName}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {t('chart.file')}
+              {patient.birthDate ? (
+                <>
+                  {' · '}
+                  {t('patients.bornOn')}{' '}
+                  {patient.birthDate.split('-').reverse().join('/')}
+                </>
+              ) : null}
+              {' · '}
+              {t('patients.age')} : {displayAge(patient)} {t('patients.years')}
+            </p>
+          </div>
+          {!editingInfo ? (
+            <button
+              type="button"
+              onClick={startEditInfo}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-clinic-800 hover:bg-clinic-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {t('chart.editInfo')}
+            </button>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingInfo(false)}
+                className="rounded-lg px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={saveInfo}
+                className="rounded-lg bg-clinic-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-clinic-800"
+              >
+                {t('chart.saveInfo')}
+              </button>
+            </div>
+          )}
         </div>
+
+        {editingInfo ? (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <label className="block text-xs font-medium text-slate-600">
+              {t('form.lastName')}
+              <input
+                value={infoDraft.lastName}
+                onChange={(e) => setInfoDraft({ ...infoDraft, lastName: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">
+              {t('form.firstName')}
+              <input
+                value={infoDraft.firstName}
+                onChange={(e) => setInfoDraft({ ...infoDraft, firstName: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">
+              {t('patients.birthDate')}
+              <input
+                type="date"
+                value={infoDraft.birthDate}
+                onChange={(e) => setInfoDraft({ ...infoDraft, birthDate: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">
+              {t('patients.phone')}
+              <input
+                value={infoDraft.phone}
+                onChange={(e) => setInfoDraft({ ...infoDraft, phone: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <label className="col-span-2 block text-xs font-medium text-slate-600">
+              {t('patients.address')}
+              <input
+                value={infoDraft.address}
+                onChange={(e) => setInfoDraft({ ...infoDraft, address: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <div className="col-span-2">
+              <DentistSelect
+                dentists={clinic.dentists ?? []}
+                value={infoDraft.dentistId}
+                onChange={(dentistId) => setInfoDraft({ ...infoDraft, dentistId })}
+                label={`${t('patients.dentist')} (${t('common.optional')})`}
+                optionalLabel={t('form.unassigned')}
+              />
+            </div>
+            <label className="col-span-2 block text-xs font-medium text-slate-600">
+              {t('form.antecedents')}
+              <textarea
+                value={infoDraft.antecedents}
+                onChange={(e) => setInfoDraft({ ...infoDraft, antecedents: e.target.value })}
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              />
+            </label>
+            <label className="col-span-2 flex items-start gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={infoDraft.hasAllergies}
+                onChange={(e) => setInfoDraft({ ...infoDraft, hasAllergies: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>{t('form.allergyFlag')}</span>
+            </label>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+            <Info label={t('patients.phone')} value={patient.phone} icon={<Phone className="h-3.5 w-3.5 text-slate-400" />} />
+            <Info label={t('patients.address')} value={patient.address || '—'} icon={<MapPin className="h-3.5 w-3.5 text-slate-400" />} />
+            <Info label={t('patients.dentist')} value={dentist ? dentistName(dentist) : t('form.unassigned')} />
+            <Info label={t('patients.history')} value={patient.antecedents} />
+          </div>
+        )}
         {allergy && (
           <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -182,6 +454,64 @@ export function PatientChart() {
           onAdd={addMedia}
           onUpdate={updateMedia}
           onDelete={deleteMedia}
+        />
+      )}
+
+      {modal === 'rx' && (
+        <PrescriptionEditor
+          patients={activePatients}
+          dentists={clinic.dentists ?? []}
+          initial={rxInitial}
+          onClose={() => setModal(null)}
+          onSave={(draft) => {
+            const saved = addPrescription({
+              ...draft,
+              patientId: patient.id,
+              patientName,
+            })
+            setModal(null)
+            return saved
+          }}
+          onPrint={printRx}
+        />
+      )}
+
+      {modal === 'appointment' && (
+        <NewAppointmentModal
+          patients={activePatients}
+          dentists={clinic.dentists ?? []}
+          defaultDate={toISODate(new Date())}
+          defaultPatientId={patient.id}
+          onClose={() => setModal(null)}
+          onSave={async (draft) => {
+            const linked = {
+              ...draft,
+              patientId: patient.id,
+              patientName,
+              patientPhone: patient.phone,
+            }
+            if (isCloudClinicMode()) await addAppointmentCloud(linked)
+            else addAppointment(linked)
+            setModal(null)
+          }}
+        />
+      )}
+
+      {modal === 'prosthesis' && (
+        <ProsthesisModal
+          patients={activePatients}
+          labs={[...new Set((clinic.prostheses ?? []).map((p) => p.lab).filter(Boolean))]}
+          initial={null}
+          defaultPatientId={patient.id}
+          onClose={() => setModal(null)}
+          onSave={(draft) => {
+            addProsthesis({
+              ...draft,
+              patientId: patient.id,
+              patientName,
+            })
+            setModal(null)
+          }}
         />
       )}
     </div>

@@ -4,11 +4,16 @@ import type { AppConfig } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 import type { Logger } from '../lib/logger.js';
 import { logOrgEvent } from '../organization/events.js';
+import {
+  assertValidLicenseKeyFormat,
+  licenseKeyFingerprint,
+} from '../organization/license-key.js';
 import { buildOrganizationSlug } from '../organization/schemas.js';
 import type {
   PublicMembership,
   PublicOrganization,
 } from '../organization/service.js';
+import { writeAuditLog } from '../audit/service.js';
 import { normalizeEmail } from './email.js';
 import { logAuthEvent } from './events.js';
 import { hashPassword, isArgon2idHash, verifyPassword } from './passwords.js';
@@ -157,10 +162,7 @@ export class AuthService {
     input: BootstrapOrganizationInput,
   ): Promise<BootstrapOrganizationResult> {
     const email = normalizeEmail(input.adminEmail);
-    const licenseKey = input.licenseKey.trim();
-    if (!licenseKey) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'licenseKey is required');
-    }
+    const licenseKey = assertValidLicenseKeyFormat(input.licenseKey);
 
     const existingBinding = await this.prisma.licenseBinding.findUnique({
       where: { licenseId: licenseKey },
@@ -330,6 +332,17 @@ export class AuthService {
       licenseBindingId: bindingId,
     });
 
+    await writeAuditLog(this.prisma, {
+      organizationId: created.organization.id,
+      actor: { user: created.user, membership: created.membership },
+      action: 'license.activated',
+      module: 'license',
+      resourceType: 'LicenseBinding',
+      resourceId: bindingId,
+      summary: 'License activated via organization bootstrap',
+      details: { fingerprint: licenseKeyFingerprint(licenseKey) },
+    });
+
     const device = await this.upsertDevice(created.user.id, input.device);
     const { rawToken, session } = await this.createSession(
       created.user.id,
@@ -385,18 +398,19 @@ export class AuthService {
     registered: boolean;
     organizationName: string | null;
   }> {
-    const licenseKey = licenseKeyRaw.trim();
+    const licenseKey = assertValidLicenseKeyFormat(licenseKeyRaw);
     const binding = await this.prisma.licenseBinding.findUnique({
       where: { licenseId: licenseKey },
       include: { organization: true },
     });
+    // Do not reveal clinic name to unauthenticated callers (enumeration).
     if (!binding || binding.organization.status !== 'ACTIVE') {
       return { licenseKey, registered: false, organizationName: null };
     }
     return {
       licenseKey,
       registered: true,
-      organizationName: binding.organization.name,
+      organizationName: null,
     };
   }
 

@@ -8,28 +8,35 @@
 const { cloudFetch, CloudApiError } = require('./api-proxy.cjs')
 const { stripSecrets } = require('./redact.cjs')
 
-const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PATIENT_ID_PATH = /^\/patients\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i
 
 /**
- * Generic proxy path: block mutations.
- * POST → cloud:patients:create only
- * PATCH → cloud:patients:update only
- * DELETE → always blocked (Phase 8C)
+ * Generic cloud:request path: force dedicated IPC for patient create/update.
+ * Soft-archive DELETE /patients/:id remains allowlisted (Phase 1).
+ * Nested clinical routes (/patients/:id/consultations, …) are not blocked here.
  * @param {string} method
  * @param {string} path
  */
 function assertPatientsReadOnly(method, path) {
   const m = String(method || 'GET').toUpperCase()
-  const p = String(path || '')
-  if (!p.startsWith('/patients')) return
-  if (WRITE_METHODS.has(m)) {
-    let hint = 'Cloud Patients mutation blocked'
-    if (m === 'POST') hint = 'POST /patients only allowed via cloud:patients:create (Phase 8C)'
-    else if (m === 'PATCH') hint = 'PATCH /patients only allowed via cloud:patients:update (Phase 8C)'
-    else if (m === 'DELETE') hint = 'Cloud Patients DELETE blocked (Phase 8C — update only)'
-    else if (m === 'PUT') hint = 'Cloud Patients PUT blocked'
-    throw new CloudApiError('FORBIDDEN', hint, 403)
+  const p = String(path || '').split('?')[0]
+  if (m === 'POST' && /^\/patients\/?$/.test(p)) {
+    throw new CloudApiError(
+      'FORBIDDEN',
+      'POST /patients only allowed via cloud:patients:create (Phase 8C)',
+      403,
+    )
+  }
+  if (m === 'PATCH' && PATIENT_ID_PATH.test(p)) {
+    throw new CloudApiError(
+      'FORBIDDEN',
+      'PATCH /patients only allowed via cloud:patients:update (Phase 8C)',
+      403,
+    )
+  }
+  if (m === 'PUT' && (/^\/patients\/?$/.test(p) || PATIENT_ID_PATH.test(p))) {
+    throw new CloudApiError('FORBIDDEN', 'Cloud Patients PUT blocked', 403)
   }
 }
 

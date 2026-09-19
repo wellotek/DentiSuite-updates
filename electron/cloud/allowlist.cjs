@@ -10,9 +10,11 @@ const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-
 
 /** @type {Array<{ methods: Set<string>, pattern: RegExp }>} */
 const RULES = [
-  // Patients
-  { methods: new Set(['GET', 'POST']), pattern: /^\/patients\/?$/ },
-  { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/patients/${UUID}/?$`) },
+  // Patients — create/update via dedicated IPC only; DELETE = soft-archive
+  { methods: new Set(['GET']), pattern: /^\/patients\/?$/ },
+  { methods: new Set(['GET', 'DELETE']), pattern: new RegExp(`^/patients/${UUID}/?$`) },
+  { methods: new Set(['POST']), pattern: new RegExp(`^/patients/${UUID}/restore/?$`) },
+  { methods: new Set(['POST']), pattern: new RegExp(`^/patients/${UUID}/purge/?$`) },
   // Appointments
   { methods: new Set(['GET', 'POST']), pattern: /^\/appointments\/?$/ },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/appointments/${UUID}/?$`) },
@@ -22,12 +24,15 @@ const RULES = [
   // Stock
   { methods: new Set(['GET', 'POST']), pattern: /^\/stock\/?$/ },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/stock/${UUID}/?$`) },
-  // Clinical
+  // Clinical (nested + org bulk lists for Cloud hydrate)
+  { methods: new Set(['GET']), pattern: /^\/consultations\/?$/ },
   { methods: new Set(['GET', 'POST']), pattern: new RegExp(`^/patients/${UUID}/consultations/?$`) },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/consultations/${UUID}/?$`) },
+  { methods: new Set(['GET']), pattern: /^\/treatments\/?$/ },
   { methods: new Set(['GET', 'POST']), pattern: new RegExp(`^/patients/${UUID}/treatments/?$`) },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/treatments/${UUID}/?$`) },
   // Prescriptions
+  { methods: new Set(['GET']), pattern: /^\/prescriptions\/?$/ },
   { methods: new Set(['GET', 'POST']), pattern: new RegExp(`^/patients/${UUID}/prescriptions/?$`) },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/prescriptions/${UUID}/?$`) },
   // Billing
@@ -39,6 +44,7 @@ const RULES = [
   { methods: new Set(['GET', 'POST']), pattern: new RegExp(`^/patients/${UUID}/prostheses/?$`) },
   { methods: new Set(['GET', 'PATCH', 'DELETE']), pattern: new RegExp(`^/prostheses/${UUID}/?$`) },
   // Media / documents
+  { methods: new Set(['GET']), pattern: /^\/media\/?$/ },
   { methods: new Set(['GET', 'POST']), pattern: new RegExp(`^/patients/${UUID}/media/?$`) },
   { methods: new Set(['GET', 'DELETE']), pattern: new RegExp(`^/media/${UUID}/?$`) },
   { methods: new Set(['GET']), pattern: new RegExp(`^/media/${UUID}/url/?$`) },

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const SUPPORTED_CLINIC_SCHEMA_VERSION = 8;
+/** Local clinic versions accepted for cloud migration (8 legacy, 9+ birthDate/meds). */
+export const ACCEPTED_CLINIC_SCHEMA_VERSIONS = new Set([8, 9]);
 
 const looseRecord = z.record(z.string(), z.unknown());
 

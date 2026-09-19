@@ -38,6 +38,18 @@ export async function listConsultations(
   return asList(data)
 }
 
+/** Org-scoped bulk list (tenant from session). */
+export async function listOrgConsultations(
+  query: Record<string, string | number | undefined> = {},
+) {
+  const data = await cloudApi<Partial<CloudListResult<CloudConsultation>>>({
+    method: 'GET',
+    path: '/consultations',
+    query,
+  })
+  return asList(data)
+}
+
 export async function createConsultation(patientId: string, body: Record<string, unknown>) {
   const data = await cloudApi<{ consultation: CloudConsultation }>({
     method: 'POST',
@@ -63,6 +75,17 @@ export async function listTreatments(
   const data = await cloudApi<Partial<CloudListResult<CloudTreatment>>>({
     method: 'GET',
     path: `/patients/${patientId}/treatments`,
+    query,
+  })
+  return asList(data)
+}
+
+export async function listOrgTreatments(
+  query: Record<string, string | number | undefined> = {},
+) {
+  const data = await cloudApi<Partial<CloudListResult<CloudTreatment>>>({
+    method: 'GET',
+    path: '/treatments',
     query,
   })
   return asList(data)

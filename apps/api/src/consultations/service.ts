@@ -147,6 +147,20 @@ export class ClinicalCareService {
     };
   }
 
+  async listConsultationsForOrganization(
+    scope: TenantScope,
+    query: ListConsultationsQuery,
+  ) {
+    const { items, total } = await this.sessions.listForOrganization(scope, query);
+    return {
+      items: items.map((i) => this.toPublicConsultation(i)),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit) || 1),
+    };
+  }
+
   async getConsultation(scope: TenantScope, id: string): Promise<PublicConsultation> {
     const row = await this.sessions.findById(scope, id);
     if (!row) {
@@ -223,6 +237,20 @@ export class ClinicalCareService {
       patientId,
       query,
     );
+    return {
+      items: items.map((i) => this.toPublicTreatment(i)),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit) || 1),
+    };
+  }
+
+  async listTreatmentsForOrganization(
+    scope: TenantScope,
+    query: ListTreatmentsQuery,
+  ) {
+    const { items, total } = await this.treatments.listForOrganization(scope, query);
     return {
       items: items.map((i) => this.toPublicTreatment(i)),
       page: query.page,

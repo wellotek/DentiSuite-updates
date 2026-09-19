@@ -4,20 +4,25 @@ import type { Patient, Prosthesis, ProsthesisDraft } from '../../types'
 import { toISODate } from '../../lib/agenda'
 import { normalizeProsthesisStatus, PROSTHESIS_STATUSES, PROSTHESIS_TYPES, type ProsthesisUiStatus } from '../../lib/prostheses'
 import { useT } from '../../i18n'
+import { PatientPicker } from '../patients/PatientPicker'
+import { useToast } from '../ui/Toast'
 
 interface Props {
   patients: Patient[]
   labs: string[]
   initial?: Prosthesis | null
+  /** Prefill patient when creating (e.g. from patient chart). */
+  defaultPatientId?: string
   onClose: () => void
   onSave: (draft: ProsthesisDraft) => void
 }
 
-export function ProsthesisModal({ patients, labs, initial, onClose, onSave }: Props) {
+export function ProsthesisModal({ patients, labs, initial, defaultPatientId, onClose, onSave }: Props) {
   const t = useT()
+  const toast = useToast()
   const editing = Boolean(initial)
   const [form, setForm] = useState({
-    patientId: initial?.patientId || '',
+    patientId: initial?.patientId || defaultPatientId || '',
     type: initial?.type ?? PROSTHESIS_TYPES[0],
     tooth: initial?.tooth ?? '',
     lab: initial?.lab ?? '',
@@ -54,6 +59,7 @@ export function ProsthesisModal({ patients, labs, initial, onClose, onSave }: Pr
       notes: form.notes.trim() || undefined,
       status: normalizeProsthesisStatus(form.status),
     })
+    toast.success(t('toast.saved'))
   }
 
   return createPortal(
@@ -69,22 +75,17 @@ export function ProsthesisModal({ patients, labs, initial, onClose, onSave }: Pr
           {editing ? t('prostheses.edit') : t('prostheses.addTitle')}
         </h2>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-xs font-medium text-slate-600">
-            {t('prostheses.patient')}
-            <select
+          <div className="col-span-2">
+            <PatientPicker
+              patients={patients}
               value={form.patientId}
-              onChange={(e) => setForm({ ...form, patientId: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              label={t('prostheses.patient')}
               required
-            >
-              <option value="">{t('agenda.choosePatient')}</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.firstName} {p.lastName}
-                </option>
-              ))}
-            </select>
-          </label>
+              allowEmpty
+              emptyLabel={t('agenda.choosePatient')}
+              onChange={(patientId) => setForm({ ...form, patientId })}
+            />
+          </div>
           <label className="col-span-2 block text-xs font-medium text-slate-600">
             {t('prostheses.type')}
             <select

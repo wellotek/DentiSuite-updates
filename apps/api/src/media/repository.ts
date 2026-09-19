@@ -59,6 +59,29 @@ export class PatientMediaRepository {
     return { items, total };
   }
 
+  /** Metadata-only org list — public DTO never includes object bytes. */
+  async listForOrganization(
+    scope: TenantScope,
+    query: ListMediaQuery,
+  ): Promise<{ items: PatientMedia[]; total: number }> {
+    const where: Prisma.PatientMediaWhereInput = {
+      organizationId: scope.organizationId,
+      ...(query.kind ? { kind: query.kind } : {}),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.patientMedia.count({ where }),
+      this.prisma.patientMedia.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    return { items, total };
+  }
+
   async setStatus(
     scope: TenantScope,
     id: string,
