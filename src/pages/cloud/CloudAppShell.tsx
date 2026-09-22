@@ -280,6 +280,7 @@ export function CloudAppShell({ children }: { children?: ReactNode }) {
         settings: useAppStore.getState().clinic.settings,
         actCatalog: useAppStore.getState().clinic.actCatalog,
         medicationCatalog: useAppStore.getState().clinic.medicationCatalog ?? [],
+        medicationFavoritesByUser: useAppStore.getState().clinic.medicationFavoritesByUser ?? {},
         stockItems: [],
         sessions: [],
         mediaFiles: [],

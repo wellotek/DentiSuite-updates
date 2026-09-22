@@ -113,11 +113,23 @@ export interface MedicationItem {
   dci: string
   dosage: string
   form: string
+  /** Conditionnement (ex. B/10) — info nomenclature, pas une posologie. */
+  packaging?: string
+  laboratory?: string
+  /** Code produit nomenclature (ex. 01 A 003). */
+  officialCode?: string
+  /** N° d’enregistrement officiel. */
+  registrationNumber?: string
   route?: string
   family?: MedicationFamily | string
   market?: string
   status: MedicationStatus
   source: string
+  /** Version de la nomenclature (ex. Août 2026). */
+  sourceVersion?: string
+  importedAt?: string
+  /** official = MIPH ; custom = ajout cabinet. */
+  origin?: 'official' | 'custom'
   lastVerifiedAt: string
 }
 
@@ -272,6 +284,8 @@ export interface ClinicState {
   actCatalog: ActItem[]
   /** Clinic overrides + custom meds (merged with global seed). */
   medicationCatalog: MedicationItem[]
+  /** Favoris médicaments par compte/praticien (clé = userId Cloud ou "legacy"). */
+  medicationFavoritesByUser?: Record<string, string[]>
   stockItems: StockItem[]
   sessions: PatientSession[]
   mediaFiles: PatientMedia[]

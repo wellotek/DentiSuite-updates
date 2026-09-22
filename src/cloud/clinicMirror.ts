@@ -221,6 +221,8 @@ export async function fetchClinicMirror(options?: {
     try {
       return await fetchAllPages(fetchPage, baseQuery, { limit: lim, label })
     } catch (err) {
+      // Patients are the source of truth for the cabinet roster — never silently wipe them.
+      if (label === 'patients') throw err
       console.warn(`[clinicMirror] ${label} skipped:`, err)
       return []
     }
@@ -302,6 +304,7 @@ export async function fetchClinicMirror(options?: {
     settings,
     actCatalog: seedClinic.actCatalog,
     medicationCatalog: useAppStore.getState().clinic.medicationCatalog ?? [],
+    medicationFavoritesByUser: useAppStore.getState().clinic.medicationFavoritesByUser ?? {},
   }
 }
 

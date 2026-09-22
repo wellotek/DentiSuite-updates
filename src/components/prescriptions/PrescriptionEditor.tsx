@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Eye, Plus, Printer, Trash2, X } from 'lucide-react'
 import type { Dentist, Patient, Prescription, PrescriptionDraft, PrescriptionLine } from '../../types'
@@ -14,6 +14,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { MedicationDrugField } from './MedicationDrugField'
 import { PatientPicker } from '../patients/PatientPicker'
 import { useToast } from '../ui/Toast'
+import { CloudAuthContext } from '../../cloud/CloudAuthContext'
 
 const WALK_IN = '__walkin__'
 
@@ -30,9 +31,14 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
   const t = useT()
   const toast = useToast()
   const medicationCatalog = useAppStore((s) => s.clinic.medicationCatalog)
+  const medicationFavoritesByUser = useAppStore((s) => s.clinic.medicationFavoritesByUser)
+  const toggleMedicationFavorite = useAppStore((s) => s.toggleMedicationFavorite)
   const settings = useAppStore((s) => s.clinic.settings)
   const locale = localeTag(settings?.locale ?? 'fr')
   const catalog = useMemo(() => mergeMedicationCatalog(medicationCatalog), [medicationCatalog])
+  const cloudAuth = useContext(CloudAuthContext)
+  const favoriteUserKey = cloudAuth?.context?.user?.id || 'legacy'
+  const favoriteIds = medicationFavoritesByUser?.[favoriteUserKey] ?? []
   const savedId = 'id' in initial ? initial.id : undefined
   const draftKey = savedId || `new-rx-${initial.patientId || 'walkin'}`
   type RxForm = {
@@ -304,6 +310,8 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
                         <MedicationDrugField
                           line={line}
                           catalog={catalog}
+                          favoriteIds={favoriteIds}
+                          onToggleFavorite={(id) => toggleMedicationFavorite(favoriteUserKey, id)}
                           onChange={(next) => {
                             const lines = form.lines.map((l, i) => (i === index ? next : l))
                             setForm({ ...form, lines })

@@ -131,24 +131,32 @@ export function PatientChart() {
     setEditingInfo(true)
   }
 
-  function saveInfo() {
+  async function saveInfo() {
     const antecedents = infoDraft.antecedents.trim() || 'Aucun'
     const birthDate = infoDraft.birthDate.trim() || null
     const age = computeAgeFromBirthDate(birthDate) ?? (Number(infoDraft.age) || 0)
-    updatePatient(patient!.id, {
-      firstName: infoDraft.firstName.trim() || patient!.firstName,
-      lastName: infoDraft.lastName.trim() || patient!.lastName,
-      birthDate,
-      age,
-      phone: infoDraft.phone.trim(),
-      address: infoDraft.address.trim(),
-      antecedents,
-      hasAllergies: infoDraft.hasAllergies || /allerg/i.test(antecedents),
-      dentistId: infoDraft.dentistId || undefined,
-      notes: patient!.notes,
-    })
-    setEditingInfo(false)
-    toast.success(t('toast.patientSaved'))
+    try {
+      await updatePatient(patient!.id, {
+        firstName: infoDraft.firstName.trim() || patient!.firstName,
+        lastName: infoDraft.lastName.trim() || patient!.lastName,
+        birthDate,
+        age,
+        phone: infoDraft.phone.trim(),
+        address: infoDraft.address.trim(),
+        antecedents,
+        hasAllergies: infoDraft.hasAllergies || /allerg/i.test(antecedents),
+        dentistId: infoDraft.dentistId || undefined,
+        notes: patient!.notes,
+      })
+      setEditingInfo(false)
+      toast.success(t('toast.patientSaved'))
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Échec de l’enregistrement du patient. Vérifiez la connexion et réessayez.',
+      )
+    }
   }
 
   function applyAct(

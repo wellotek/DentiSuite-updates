@@ -570,6 +570,7 @@ export const seedClinic: ClinicState = {
   },
   actCatalog: defaultActCatalog,
   medicationCatalog: [],
+  medicationFavoritesByUser: {},
   stockItems: defaultStockItems,
   sessions: [
     {

@@ -67,6 +67,7 @@ export function clinicFromBackup(payload: ClinicBackupPayload): ClinicState {
     ...migrated,
     settings: { ...seedClinic.settings, ...migrated.settings },
     medicationCatalog: migrated.medicationCatalog ?? [],
+    medicationFavoritesByUser: migrated.medicationFavoritesByUser ?? {},
   }
 }
 

@@ -81,11 +81,13 @@ function mapCloudPatient(raw) {
     lastName: p.lastName,
     phone: typeof p.phone === 'string' ? p.phone : '',
     age: typeof p.age === 'number' ? p.age : 0,
+    birthDate: typeof p.birthDate === 'string' ? p.birthDate : null,
     address: typeof p.address === 'string' ? p.address : '',
     antecedents: typeof p.antecedents === 'string' ? p.antecedents : '',
     hasAllergies: Boolean(p.hasAllergies),
     dentistId: typeof p.dentistId === 'string' ? p.dentistId : null,
     notes: typeof p.notes === 'string' ? p.notes : null,
+    archivedAt: typeof p.archivedAt === 'string' ? p.archivedAt : null,
     createdAt: typeof p.createdAt === 'string' ? p.createdAt : null,
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : null,
   })

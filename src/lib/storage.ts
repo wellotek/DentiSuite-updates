@@ -39,6 +39,7 @@ type LooseClinic = Partial<ClinicState> & {
   settings?: Partial<ClinicSettings>
   actCatalog?: ClinicState['actCatalog']
   medicationCatalog?: ClinicState['medicationCatalog']
+  medicationFavoritesByUser?: ClinicState['medicationFavoritesByUser']
   stockItems?: StockItem[]
   sessions?: PatientSession[]
   mediaFiles?: PatientMedia[]
@@ -101,7 +102,9 @@ function migrateAppointment(raw: LooseAppointment, patients: Patient[], dentists
 }
 
 export function migrateClinic(raw: LooseClinic | null | undefined): ClinicState {
-  if (!raw?.patients?.length) return seedClinic
+  // Missing store → seed. Empty patients array is valid (cabinet without patients)
+  // and must NOT be replaced by demo seed data (that wiped real cabinets after save races).
+  if (!raw || !Array.isArray(raw.patients)) return seedClinic
 
   const seedById = new Map(seedClinic.patients.map((p) => [p.id, p]))
   const patients = raw.patients.map((p) => migratePatient(p, seedById.get(p.id)))
@@ -157,6 +160,10 @@ export function migrateClinic(raw: LooseClinic | null | undefined): ClinicState 
     settings,
     actCatalog,
     medicationCatalog: Array.isArray(raw.medicationCatalog) ? raw.medicationCatalog : [],
+    medicationFavoritesByUser:
+      raw.medicationFavoritesByUser && typeof raw.medicationFavoritesByUser === 'object'
+        ? raw.medicationFavoritesByUser
+        : {},
     stockItems: Array.isArray(raw.stockItems) ? raw.stockItems : seedClinic.stockItems,
     sessions: Array.isArray(raw.sessions) ? raw.sessions : seedClinic.sessions,
     mediaFiles: Array.isArray(raw.mediaFiles) ? raw.mediaFiles : [],
@@ -185,10 +192,20 @@ export async function loadClinic(): Promise<ClinicState> {
   return clinic
 }
 
-export async function saveClinic(clinic: ClinicState) {
+export async function saveClinic(clinic: ClinicState): Promise<void> {
   if (hasBridge()) {
-    await window.dentisuite!.setClinic(clinic)
+    const result = await window.dentisuite!.setClinic(clinic)
+    if (result && typeof result === 'object' && result.ok === false) {
+      const code = result.code || 'SAVE_FAILED'
+      const message = result.message || 'Échec de l’enregistrement local du cabinet'
+      throw new Error(`[clinic:set] ${code}: ${message}`)
+    }
     return
   }
   localStorage.setItem(LOCAL_CLINIC, JSON.stringify(clinic))
+}
+
+/** True when Electron/local bridge can persist clinic JSON (Legacy). */
+export function canPersistClinicLocally(): boolean {
+  return hasBridge() || typeof localStorage !== 'undefined'
 }

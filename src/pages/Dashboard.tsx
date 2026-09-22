@@ -397,10 +397,18 @@ export function Dashboard() {
           initial={null}
           onClose={() => setModal(null)}
           onSave={async (draft) => {
-            const id = isCloudClinicMode() ? await addPatientCloud(draft) : addPatient(draft)
-            setModal(null)
-            toast.success(t('toast.patientSaved'))
-            navigate(`/patients/${id}`)
+            try {
+              const id = isCloudClinicMode() ? await addPatientCloud(draft) : await addPatient(draft)
+              setModal(null)
+              toast.success(t('toast.patientSaved'))
+              navigate(`/patients/${id}`)
+            } catch (err) {
+              toast.error(
+                err instanceof Error
+                  ? err.message
+                  : 'Échec de l’enregistrement du patient. Vérifiez la connexion et réessayez.',
+              )
+            }
           }}
         />
       )}

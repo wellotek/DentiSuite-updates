@@ -216,17 +216,25 @@ export function Patients() {
           initial={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSave={async (draft) => {
-            if (editing === 'new') {
-              const id = isCloudClinicMode()
-                ? await addPatientCloud(draft)
-                : addPatient(draft)
-              setEditing(null)
-              toast.success(t('toast.patientSaved'))
-              navigate(`/patients/${id}`)
-            } else {
-              updatePatient(editing.id, draft)
-              setEditing(null)
-              toast.success(t('toast.patientSaved'))
+            try {
+              if (editing === 'new') {
+                const id = isCloudClinicMode()
+                  ? await addPatientCloud(draft)
+                  : await addPatient(draft)
+                setEditing(null)
+                toast.success(t('toast.patientSaved'))
+                navigate(`/patients/${id}`)
+              } else {
+                await updatePatient(editing.id, draft)
+                setEditing(null)
+                toast.success(t('toast.patientSaved'))
+              }
+            } catch (err) {
+              toast.error(
+                err instanceof Error
+                  ? err.message
+                  : 'Échec de l’enregistrement du patient. Vérifiez la connexion et réessayez.',
+              )
             }
           }}
         />

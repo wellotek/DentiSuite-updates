@@ -12,7 +12,7 @@ import {
 } from '../i18n'
 import type { ClinicSettings, DateFormat, Locale, MedicationItem, TimeFormat } from '../types'
 import { UpdateNotifier } from '../components/UpdateNotifier'
-import { MEDICATION_SOURCE_LABEL } from '../data/medications'
+import { MEDICATION_SOURCE_LABEL, MEDICATION_SOURCE_VERSION, CUSTOM_MEDICATION_SOURCE } from '../data/medications'
 import { mergeMedicationCatalog, MEDICATION_IMPORT_FIELDS, searchMedications } from '../lib/medications'
 import { toISODate } from '../lib/agenda'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
@@ -25,7 +25,7 @@ import {
 } from '../lib/clinicBackup'
 import { saveClinic } from '../lib/storage'
 
-const APP_VERSION = '3.4.0'
+const APP_VERSION = '3.5.1'
 
 export function Settings() {
   const t = useT()
@@ -82,7 +82,8 @@ export function Settings() {
       family: 'autre',
       market: 'cabinet',
       status: 'active',
-      source: 'Catalogue personnalisé cabinet',
+      origin: 'custom',
+      source: CUSTOM_MEDICATION_SOURCE,
       lastVerifiedAt: toISODate(new Date()),
     }
     upsertMedication(item)
@@ -152,9 +153,13 @@ export function Settings() {
           <h2 className="text-sm font-semibold">{t('settings.medications')}</h2>
         </div>
         <p className="mb-3 text-sm text-slate-500">{t('settings.medicationsHint')}</p>
-        <p className="mb-3 text-[11px] text-slate-400">{t('settings.medSourceNote')}</p>
+        <p className="mb-1 text-[11px] text-slate-400">{t('settings.medSourceNote')}</p>
         <p className="mb-3 text-[11px] text-slate-400">
-          Import futur ({MEDICATION_IMPORT_FIELDS.join(', ')}) — CSV / JSON / catalogue officiel.
+          {MEDICATION_SOURCE_LABEL} — {MEDICATION_SOURCE_VERSION} · {catalog.filter((m) => m.status !== 'inactive').length}{' '}
+          {t('settings.medCount')}
+        </p>
+        <p className="mb-3 text-[11px] text-slate-400">
+          Import ({MEDICATION_IMPORT_FIELDS.join(', ')}) — relancer via `npm run medications:import-miph`.
         </p>
         <div className="mb-3 flex flex-wrap gap-2">
           <input
@@ -193,6 +198,15 @@ export function Settings() {
               <div>
                 <p className="font-medium text-slate-900">
                   {m.name}{' '}
+                  {m.origin === 'custom' ? (
+                    <span className="text-[10px] font-semibold uppercase text-clinic-700">
+                      {t('settings.medCustomBadge')}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold uppercase text-slate-400">
+                      {t('settings.medOfficialBadge')}
+                    </span>
+                  )}{' '}
                   {m.status === 'inactive' ? (
                     <span className="text-[10px] font-semibold uppercase text-amber-700">inactif</span>
                   ) : null}

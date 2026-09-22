@@ -79,7 +79,10 @@ export function Agenda() {
       setEditing(null)
     } else {
       if (isCloudClinicMode()) await addAppointmentCloud(draft)
-      else addAppointment(draft)
+      else {
+        addAppointment(draft)
+        await useAppStore.getState().flushClinicPersist()
+      }
       setOpen(false)
     }
     setSelected(draft.date)

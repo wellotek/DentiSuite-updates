@@ -1,7 +1,7 @@
 {
   "name": "dentisuite",
   "productName": "DentiSuite",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Gestion complète d'un cabinet dentaire",
   "private": true,
   "type": "module",
@@ -29,7 +29,8 @@
     "api:build": "npm --prefix apps/api run build",
     "api:start": "npm --prefix apps/api run start",
     "api:test": "npm --prefix apps/api run test",
-    "api:typecheck": "npm --prefix apps/api run typecheck"
+    "api:typecheck": "npm --prefix apps/api run typecheck",
+    "medications:import-miph": "node scripts/import-miph-nomenclature.mjs"
   },
   "build": {
     "appId": "com.dentisuite.app",
@@ -92,6 +93,7 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.4",
-    "wait-on": "^8.0.3"
+    "wait-on": "^8.0.3",
+    "xlsx": "^0.18.5"
   }
 }

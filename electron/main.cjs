@@ -198,20 +198,50 @@ function readStore() {
     const parsed = JSON.parse(raw)
     const hadAuth = parsed && Object.prototype.hasOwnProperty.call(parsed, 'auth')
     const store = withoutAuth({ ...defaultStore(), ...parsed })
-    if (hadAuth) writeStore(store)
+    if (hadAuth) writeStoreUnlocked(store)
     return store
   } catch {
     return defaultStore()
   }
 }
 
+function writeStoreUnlocked(data) {
+  const file = storePath()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  // Write via temp + replace to avoid truncated JSON if the process dies mid-write.
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(withoutAuth(data), null, 2), 'utf-8')
+  try {
+    fs.renameSync(tmp, file)
+  } catch {
+    // Windows cannot rename over an existing file — replace explicitly.
+    try {
+      fs.unlinkSync(file)
+    } catch {
+      /* first write */
+    }
+    fs.renameSync(tmp, file)
+  }
+}
+
+/** Serialize all store mutations — concurrent clinic:set + branding:set was wiping patients. */
+let storeWriteChain = Promise.resolve()
+
+function withStoreLock(fn) {
+  const run = storeWriteChain.then(() => fn())
+  storeWriteChain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
 function writeStore(data) {
   try {
-    const file = storePath()
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, JSON.stringify(withoutAuth(data), null, 2), 'utf-8')
+    writeStoreUnlocked(data)
   } catch (error) {
     logCrash('writeStore', error)
+    throw error
   }
 }
 
@@ -316,7 +346,7 @@ app.whenReady().then(() => {
     return readStore().clinic
   })
 
-  ipcMain.handle('clinic:set', (_event, clinic) => {
+  ipcMain.handle('clinic:set', async (_event, clinic) => {
     // Cloud mode: Legacy JSON is not the business source of truth.
     // Still allow writes for Legacy fallback / local settings recovery tools.
     const { isCloudEnabled: cloudOn } = require('./cloud/config.cjs')
@@ -327,17 +357,28 @@ app.whenReady().then(() => {
       // Branding (logo / admin photo) still persists via branding:set.
       return { ok: false, code: 'CLOUD_MODE', message: 'Legacy clinic JSON is read-only in Cloud mode' }
     }
-    const store = readStore()
-    store.clinic = clinic
-    // Keep branding mirror in sync when Legacy clinic settings include images.
-    if (clinic && clinic.settings && typeof clinic.settings === 'object') {
-      store.branding = {
-        logo: typeof clinic.settings.logo === 'string' ? clinic.settings.logo : '',
-        adminPhoto: typeof clinic.settings.adminPhoto === 'string' ? clinic.settings.adminPhoto : '',
+    try {
+      await withStoreLock(() => {
+        const store = readStore()
+        store.clinic = clinic
+        // Keep branding mirror in sync when Legacy clinic settings include images.
+        if (clinic && clinic.settings && typeof clinic.settings === 'object') {
+          store.branding = {
+            logo: typeof clinic.settings.logo === 'string' ? clinic.settings.logo : '',
+            adminPhoto: typeof clinic.settings.adminPhoto === 'string' ? clinic.settings.adminPhoto : '',
+          }
+        }
+        writeStore(store)
+      })
+      return { ok: true }
+    } catch (error) {
+      logCrash('clinic:set', error)
+      return {
+        ok: false,
+        code: 'WRITE_FAILED',
+        message: error instanceof Error ? error.message : 'Clinic store write failed',
       }
     }
-    writeStore(store)
-    return { ok: true }
   })
 
   /** Branding assets — writable in Legacy AND Cloud (clinic:set is blocked in Cloud). */
@@ -350,14 +391,25 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('branding:set', (_event, branding) => {
-    const store = readStore()
-    store.branding = {
-      logo: branding && typeof branding.logo === 'string' ? branding.logo : '',
-      adminPhoto: branding && typeof branding.adminPhoto === 'string' ? branding.adminPhoto : '',
+  ipcMain.handle('branding:set', async (_event, branding) => {
+    try {
+      await withStoreLock(() => {
+        const store = readStore()
+        store.branding = {
+          logo: branding && typeof branding.logo === 'string' ? branding.logo : '',
+          adminPhoto: branding && typeof branding.adminPhoto === 'string' ? branding.adminPhoto : '',
+        }
+        writeStore(store)
+      })
+      return { ok: true }
+    } catch (error) {
+      logCrash('branding:set', error)
+      return {
+        ok: false,
+        code: 'WRITE_FAILED',
+        message: error instanceof Error ? error.message : 'Branding store write failed',
+      }
     }
-    writeStore(store)
-    return { ok: true }
   })
 
   ipcMain.handle('media:save', (_event, payload) => {

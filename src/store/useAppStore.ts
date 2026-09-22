@@ -153,8 +153,8 @@ interface AppStore {
   ) => Promise<{ ok: boolean; error?: string; status?: LicenseStatus }>
   applyLicenseStatus: (status: LicenseStatus) => void
   retryLicense: () => Promise<LicenseStatus>
-  addPatient: (patient: PatientDraft) => string
-  updatePatient: (id: string, patient: PatientDraft) => void
+  addPatient: (patient: PatientDraft) => Promise<string>
+  updatePatient: (id: string, patient: PatientDraft) => Promise<void>
   deletePatient: (id: string) => void
   restorePatient: (id: string) => void
   setToothStatus: (patientId: string, tooth: string, status: ToothStatus, note?: string) => void
@@ -183,6 +183,7 @@ interface AppStore {
   updateSettings: (patch: Partial<ClinicSettings>) => void
   upsertMedication: (item: MedicationItem) => void
   setMedicationStatus: (id: string, status: MedicationItem['status']) => void
+  toggleMedicationFavorite: (userKey: string, medicationId: string) => void
   addAppointment: (draft: AppointmentDraft) => void
   updateAppointment: (id: string, patch: Partial<AppointmentDraft>) => void
   deleteAppointment: (id: string) => void
@@ -204,6 +205,8 @@ interface AppStore {
   deletePrescription: (id: string) => void
   /** Cloud mirror: replace clinic in memory without local JSON persist. */
   replaceClinicMirror: (clinic: ClinicState) => void
+  /** Wait until pending Legacy clinic disk writes finish (no-op in Cloud). */
+  flushClinicPersist: () => Promise<void>
   /** Cloud-aware creates that return server UUID. */
   addPatientCloud: (patient: PatientDraft) => Promise<string>
   addDentistCloud: (draft: DentistDraft) => Promise<string>
@@ -211,10 +214,23 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>((set, get) => {
-  const persist = (clinic: ClinicState) => {
+  /** Serialize local clinic writes; always flush the latest Zustand snapshot. */
+  let clinicSaveChain: Promise<void> = Promise.resolve()
+
+  const enqueueClinicSave = (): Promise<void> => {
+    if (isCloudClinicMode()) return Promise.resolve()
+    clinicSaveChain = clinicSaveChain
+      .catch(() => undefined)
+      .then(async () => {
+        await saveClinic(get().clinic)
+      })
+    return clinicSaveChain
+  }
+
+  const persist = (clinic: ClinicState): Promise<void> => {
     set({ clinic })
     // Cloud mirror lives in memory only — never dual-write local JSON.
-    if (!isCloudClinicMode()) void saveClinic(clinic)
+    return enqueueClinicSave()
   }
 
   return {
@@ -261,6 +277,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
       })
     },
+
+    flushClinicPersist: () => enqueueClinicSave(),
 
     addPatientCloud: async (patient) => {
       const created = await createCloudPatient({
@@ -326,24 +344,24 @@ export const useAppStore = create<AppStore>((set, get) => {
       return status
     },
 
-    addPatient: (patient) => {
+    addPatient: async (patient) => {
       if (isCloudClinicMode()) {
         throw new Error('CLOUD_USE_addPatientCloud')
       }
       const id = `p${Date.now()}`
-      persist({
+      await persist({
         ...get().clinic,
         patients: [...get().clinic.patients, { ...patient, id, teeth: {} }],
       })
       return id
     },
 
-    updatePatient: (id, patient) => {
+    updatePatient: async (id, patient) => {
       const clinic = get().clinic
       const previous = clinic.patients.find((p) => p.id === id)
       const oldName = previous ? `${previous.firstName} ${previous.lastName}` : ''
       const name = `${patient.firstName} ${patient.lastName}`
-      persist({
+      const next: ClinicState = {
         ...clinic,
         patients: clinic.patients.map((p) => (p.id === id ? { ...p, ...patient, id, teeth: p.teeth } : p)),
         appointments: clinic.appointments.map((a) =>
@@ -360,25 +378,38 @@ export const useAppStore = create<AppStore>((set, get) => {
             ? { ...rx, patientName: name, patientId: id }
             : rx,
         ),
-      })
-      if (isCloudClinicMode()) {
-        void updateCloudPatient({
-          id,
-          firstName: patient.firstName,
-          lastName: patient.lastName,
-          phone: patient.phone,
-          age: patient.age,
-          birthDate: patient.birthDate || null,
-          address: patient.address || '',
-          antecedents: patient.antecedents || 'Aucun',
-          hasAllergies: Boolean(patient.hasAllergies),
-          dentistId: patient.dentistId || null,
-          notes: patient.notes || null,
-          expectedUpdatedAt: previous?.updatedAt,
-        }).catch((err) => {
-          console.warn('[updatePatient] cloud conflict or error:', err)
-        })
       }
+      set({ clinic: next })
+      if (isCloudClinicMode()) {
+        try {
+          const updated = await updateCloudPatient({
+            id,
+            firstName: patient.firstName,
+            lastName: patient.lastName,
+            phone: patient.phone,
+            age: patient.age,
+            birthDate: patient.birthDate || null,
+            address: patient.address || '',
+            antecedents: patient.antecedents || 'Aucun',
+            hasAllergies: Boolean(patient.hasAllergies),
+            dentistId: patient.dentistId || null,
+            notes: patient.notes || null,
+            expectedUpdatedAt: previous?.updatedAt,
+          })
+          const mapped = mapCloudPatientToStore(updated)
+          set({
+            clinic: {
+              ...get().clinic,
+              patients: get().clinic.patients.map((p) => (p.id === id ? { ...mapped, teeth: p.teeth } : p)),
+            },
+          })
+        } catch (err) {
+          set({ clinic })
+          throw err
+        }
+        return
+      }
+      await enqueueClinicSave()
     },
 
     deletePatient: (id) => {
@@ -773,6 +804,19 @@ export const useAppStore = create<AppStore>((set, get) => {
       persist({
         ...get().clinic,
         medicationCatalog: [...catalog, { ...fromSeed, status }],
+      })
+    },
+
+    toggleMedicationFavorite: (userKey, medicationId) => {
+      const key = userKey.trim() || 'legacy'
+      const map = { ...(get().clinic.medicationFavoritesByUser ?? {}) }
+      const current = new Set(map[key] ?? [])
+      if (current.has(medicationId)) current.delete(medicationId)
+      else current.add(medicationId)
+      map[key] = Array.from(current)
+      persist({
+        ...get().clinic,
+        medicationFavoritesByUser: map,
       })
     },
 

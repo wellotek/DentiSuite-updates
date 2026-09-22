@@ -83,43 +83,51 @@ export function NewAppointmentModal({
     let patientName = selected ? `${selected.firstName} ${selected.lastName}` : ''
     let patientPhone = selected?.phone ?? ''
 
-    if (isNewPatient) {
-      const { firstName, lastName } = parseFullName(form.fullName)
-      const phone = form.phone.trim()
-      if (!firstName || !phone) return
-      const draftPatient = {
-        firstName,
-        lastName: lastName || firstName,
-        phone,
-        age: 0,
-        address: '',
-        antecedents: 'Aucun',
-        hasAllergies: false,
-        dentistId: form.dentistId || undefined,
+    try {
+      if (isNewPatient) {
+        const { firstName, lastName } = parseFullName(form.fullName)
+        const phone = form.phone.trim()
+        if (!firstName || !phone) return
+        const draftPatient = {
+          firstName,
+          lastName: lastName || firstName,
+          phone,
+          age: 0,
+          address: '',
+          antecedents: 'Aucun',
+          hasAllergies: false,
+          dentistId: form.dentistId || undefined,
+        }
+        patientId = isCloudClinicMode()
+          ? await addPatientCloud(draftPatient)
+          : await addPatient(draftPatient)
+        patientName = lastName && lastName !== firstName ? `${firstName} ${lastName}` : firstName
+        patientPhone = phone
+      } else if (!selected) {
+        return
       }
-      patientId = isCloudClinicMode()
-        ? await addPatientCloud(draftPatient)
-        : addPatient(draftPatient)
-      patientName = lastName && lastName !== firstName ? `${firstName} ${lastName}` : firstName
-      patientPhone = phone
-    } else if (!selected) {
-      return
-    }
 
-    await onSave({
-      date: form.date,
-      time: form.time,
-      durationMin: Number(form.durationMin) || 30,
-      patientId,
-      patientName,
-      patientPhone,
-      motif,
-      practitioner: dentist ? dentistName(dentist) : '',
-      dentistId: form.dentistId || undefined,
-      status: appointment?.status ?? 'confirme',
-      category: form.category || inferCategory(motif),
-    })
-    toast.success(t('toast.appointmentSaved'))
+      await onSave({
+        date: form.date,
+        time: form.time,
+        durationMin: Number(form.durationMin) || 30,
+        patientId,
+        patientName,
+        patientPhone,
+        motif,
+        practitioner: dentist ? dentistName(dentist) : '',
+        dentistId: form.dentistId || undefined,
+        status: appointment?.status ?? 'confirme',
+        category: form.category || inferCategory(motif),
+      })
+      toast.success(t('toast.appointmentSaved'))
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Échec de l’enregistrement. Les données n’ont pas été sauvegardées.',
+      )
+    }
   }
 
   return createPortal(
