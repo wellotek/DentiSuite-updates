@@ -70,6 +70,7 @@ import {
 import {
   createTreatment as createCloudTreatment,
   updateTreatment as updateCloudTreatmentApi,
+  deleteTreatment as deleteCloudTreatment,
   createConsultation as createCloudConsultation,
   updateConsultation as updateCloudConsultation,
 } from '../cloud/modules/clinical'
@@ -125,6 +126,45 @@ function patientDisplayName(clinic: ClinicState, patientId: string) {
   return patient ? `${patient.firstName} ${patient.lastName}` : ''
 }
 
+function mergeCreatedTreatments(
+  clinic: ClinicState,
+  created: Treatment[],
+  opts: { patientId: string; patientName: string; act: ActItem; careStatus: CareStatus },
+): ClinicState {
+  let patients = clinic.patients
+  for (const line of created) {
+    if (line.tooth === '—') continue
+    patients = patients.map((p) =>
+      p.id !== opts.patientId
+        ? p
+        : {
+            ...p,
+            teeth: {
+              ...(p.teeth ?? {}),
+              [line.tooth]: {
+                number: line.tooth,
+                status: toothStatusForCare(opts.act, opts.careStatus),
+                note: p.teeth?.[line.tooth]?.note,
+              },
+            },
+          },
+    )
+  }
+  let invoices = clinic.invoices
+  if (opts.careStatus === 'fait') {
+    for (const line of [...created].reverse()) {
+      invoices = upsertTreatmentInvoice(invoices, line, opts.patientName)
+    }
+  }
+  const createdIds = new Set(created.map((t) => t.id))
+  return {
+    ...clinic,
+    patients,
+    treatments: [...created, ...(clinic.treatments ?? []).filter((t) => !createdIds.has(t.id))],
+    invoices,
+  }
+}
+
 const emptyClinic = (): ClinicState => ({
   schemaVersion: CLINIC_SCHEMA_VERSION,
   patients: [],
@@ -158,9 +198,9 @@ interface AppStore {
   deletePatient: (id: string) => void
   restorePatient: (id: string) => void
   setToothStatus: (patientId: string, tooth: string, status: ToothStatus, note?: string) => void
-  addTreatment: (treatment: Omit<Treatment, 'id'>, syncTooth?: boolean) => void
-  updateTreatment: (id: string, patch: Partial<Treatment>) => void
-  deleteTreatment: (id: string) => void
+  addTreatment: (treatment: Omit<Treatment, 'id'>, syncTooth?: boolean) => Promise<void>
+  updateTreatment: (id: string, patch: Partial<Treatment>) => Promise<void>
+  deleteTreatment: (id: string) => Promise<void>
   applyCareAct: (input: {
     patientId: string
     patientName: string
@@ -170,7 +210,7 @@ interface AppStore {
     comment?: string
     date?: string
     cost?: number
-  }) => void
+  }) => Promise<void>
   toggleActFavorite: (actId: string) => void
   setTreatmentPayment: (id: string, status: PaymentStatus) => void
   updateProsthesisStatus: (id: string, status: ProsthesisStatus) => void
@@ -468,35 +508,37 @@ export const useAppStore = create<AppStore>((set, get) => {
       })
     },
 
-    addTreatment: (treatment, syncTooth = true) => {
+    addTreatment: async (treatment, syncTooth = true) => {
       if (isCloudClinicMode()) {
-        void createCloudTreatment(treatment.patientId, {
+        const created = await createCloudTreatment(treatment.patientId, {
           date: treatment.date,
           tooth: treatment.tooth,
           act: treatment.act,
           code: treatment.code,
           cost: treatment.cost,
-          comment: treatment.comment || null,
+          comment: treatment.comment || '',
           careStatus: treatment.careStatus,
           paymentStatus: treatment.paymentStatus,
+          actId: treatment.actId || null,
         })
-          .then((created) => {
-            const line = mapCloudTreatmentToStore(created)
-            const clinic = get().clinic
-            const next: ClinicState = {
-              ...clinic,
-              treatments: [line, ...(clinic.treatments ?? []).filter((t) => t.id !== line.id)],
-            }
-            if (line.careStatus === 'fait') {
-              next.invoices = upsertTreatmentInvoice(
-                clinic.invoices,
-                line,
-                patientDisplayName(clinic, line.patientId),
-              )
-            }
-            persist(next)
-          })
-          .catch(() => undefined)
+        const line: Treatment = {
+          ...mapCloudTreatmentToStore(created),
+          actId: treatment.actId,
+          patientId: created.patientId || treatment.patientId,
+        }
+        const clinic = get().clinic
+        const next: ClinicState = {
+          ...clinic,
+          treatments: [line, ...(clinic.treatments ?? []).filter((t) => t.id !== line.id)],
+        }
+        if (line.careStatus === 'fait') {
+          next.invoices = upsertTreatmentInvoice(
+            clinic.invoices,
+            line,
+            patientDisplayName(clinic, line.patientId),
+          )
+        }
+        persist(next)
         return
       }
       const clinic = get().clinic
@@ -530,13 +572,46 @@ export const useAppStore = create<AppStore>((set, get) => {
       if (line.careStatus === 'fait') {
         next.invoices = upsertTreatmentInvoice(clinic.invoices, line, patientDisplayName(clinic, line.patientId))
       }
-      persist(next)
+      await persist(next)
     },
 
-    updateTreatment: (id, patch) => {
+    updateTreatment: async (id, patch) => {
       const clinic = get().clinic
       const previous = clinic.treatments.find((t) => t.id === id)
       if (!previous) return
+
+      if (isCloudClinicMode()) {
+        const remote = await updateCloudTreatmentApi(id, {
+          date: patch.date,
+          tooth: patch.tooth,
+          act: patch.act,
+          code: patch.code,
+          cost: patch.cost,
+          comment: patch.comment,
+          careStatus: patch.careStatus,
+          paymentStatus: patch.paymentStatus,
+          actId: patch.actId,
+        })
+        const updated: Treatment = {
+          ...mapCloudTreatmentToStore(remote),
+          actId: patch.actId ?? previous.actId,
+          patientId: remote.patientId || previous.patientId,
+        }
+        const current = get().clinic
+        const next: ClinicState = {
+          ...current,
+          treatments: (current.treatments ?? []).map((t) => (t.id === id ? updated : t)),
+        }
+        const name = patientDisplayName(current, updated.patientId)
+        if (updated.careStatus === 'fait') {
+          next.invoices = upsertTreatmentInvoice(current.invoices, updated, name)
+        } else if (previous.careStatus === 'fait') {
+          next.invoices = removeTreatmentInvoice(current.invoices, id)
+        }
+        persist(next)
+        return
+      }
+
       const updated = { ...previous, ...patch }
       const next: ClinicState = {
         ...clinic,
@@ -570,27 +645,65 @@ export const useAppStore = create<AppStore>((set, get) => {
               },
         )
       }
-      persist(next)
-      if (isCloudClinicMode()) {
-        void updateCloudTreatmentApi(id, patch as Record<string, unknown>).catch(() => undefined)
-      }
+      await persist(next)
     },
 
-    deleteTreatment: (id) => {
+    deleteTreatment: async (id) => {
       const clinic = get().clinic
-      persist({
+      if (isCloudClinicMode()) {
+        await deleteCloudTreatment(id)
+        persist({
+          ...get().clinic,
+          treatments: (get().clinic.treatments ?? []).filter((t) => t.id !== id),
+          invoices: removeTreatmentInvoice(get().clinic.invoices, id),
+        })
+        return
+      }
+      await persist({
         ...clinic,
         treatments: (clinic.treatments ?? []).filter((t) => t.id !== id),
         invoices: removeTreatmentInvoice(clinic.invoices, id),
       })
     },
 
-    applyCareAct: ({ patientId, patientName, teeth, act, careStatus, comment = '', date, cost }) => {
-      const clinic = get().clinic
+    applyCareAct: async ({ patientId, patientName, teeth, act, careStatus, comment = '', date, cost }) => {
       const targets = teeth.length ? teeth : ['—']
       const day = date ?? toISODate(new Date())
-      const stamp = Date.now()
       const amount = Number.isFinite(cost) ? Math.max(0, Math.round(cost as number)) : act.tariff
+
+      if (isCloudClinicMode()) {
+        const created: Treatment[] = []
+        try {
+          for (const tooth of targets) {
+            const remote = await createCloudTreatment(patientId, {
+              date: day,
+              tooth,
+              act: act.name,
+              code: act.code,
+              cost: amount,
+              comment,
+              careStatus,
+              paymentStatus: 'en_attente',
+              actId: act.id,
+            })
+            created.push({
+              ...mapCloudTreatmentToStore(remote),
+              actId: act.id,
+              patientId: remote.patientId || patientId,
+            })
+          }
+        } catch (err) {
+          if (created.length) {
+            persist(mergeCreatedTreatments(get().clinic, created, { patientId, patientName, act, careStatus }))
+          }
+          throw err
+        }
+        persist(mergeCreatedTreatments(get().clinic, created, { patientId, patientName, act, careStatus }))
+        return
+      }
+
+      const clinic = get().clinic
+      const stamp = Date.now()
       const created: Treatment[] = targets.map((tooth, index) => ({
         id: `t${stamp}${index}`,
         patientId,
@@ -604,37 +717,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         paymentStatus: 'en_attente',
         actId: act.id,
       }))
-      let patients = clinic.patients
-      for (const line of created) {
-        if (line.tooth === '—') continue
-        patients = patients.map((p) =>
-          p.id !== patientId
-            ? p
-            : {
-                ...p,
-                teeth: {
-                  ...(p.teeth ?? {}),
-                  [line.tooth]: {
-                    number: line.tooth,
-                    status: toothStatusForCare(act, careStatus),
-                    note: p.teeth?.[line.tooth]?.note,
-                  },
-                },
-              },
-        )
-      }
-      let invoices = clinic.invoices
-      if (careStatus === 'fait') {
-        for (const line of [...created].reverse()) {
-          invoices = upsertTreatmentInvoice(invoices, line, patientName)
-        }
-      }
-      persist({
-        ...clinic,
-        patients,
-        treatments: [...created, ...(clinic.treatments ?? [])],
-        invoices,
-      })
+      await persist(mergeCreatedTreatments(clinic, created, { patientId, patientName, act, careStatus }))
     },
 
     toggleActFavorite: (actId) => {

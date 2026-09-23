@@ -31,6 +31,7 @@ import { useToast } from '../components/ui/Toast'
 import { emptyPrescriptionDraft } from '../lib/prescriptions'
 import { toISODate } from '../lib/agenda'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
+import { CloudClientError, cloudErrorLabel } from '../cloud/errors'
 import { printPrescription } from '../lib/prescriptionReport'
 
 type ChartTab = 'soins' | 'seances' | 'imagerie'
@@ -159,21 +160,34 @@ export function PatientChart() {
     }
   }
 
-  function applyAct(
+  function carePersistError(err: unknown) {
+    if (err instanceof CloudClientError) return cloudErrorLabel(err)
+    return err instanceof Error
+      ? err.message
+      : 'Échec de l’enregistrement du soin. Vérifiez la connexion et réessayez.'
+  }
+
+  async function applyAct(
     act: ActItem,
     extra?: { tooth?: string; comment?: string; date?: string; status?: CareStatus; cost?: number },
   ) {
-    applyCareAct({
-      patientId: patient!.id,
-      patientName,
-      teeth: extra?.tooth ? [extra.tooth] : selectedTeeth,
-      act,
-      careStatus: extra?.status ?? careStatus,
-      comment: extra?.comment,
-      date: extra?.date,
-      cost: extra?.cost,
-    })
-    if (!extra?.tooth) setSelectedTeeth([])
+    try {
+      await applyCareAct({
+        patientId: patient!.id,
+        patientName,
+        teeth: extra?.tooth ? [extra.tooth] : selectedTeeth,
+        act,
+        careStatus: extra?.status ?? careStatus,
+        comment: extra?.comment,
+        date: extra?.date,
+        cost: extra?.cost,
+      })
+      if (!extra?.tooth) setSelectedTeeth([])
+      toast.success(t('toast.careSaved'))
+    } catch (err) {
+      toast.error(t('toast.careError'), carePersistError(err))
+      throw err
+    }
   }
 
   function printRx(rx: Prescription | PrescriptionDraft) {
@@ -439,8 +453,24 @@ export function PatientChart() {
             onAdd={({ date, tooth, act, careStatus: status, comment, cost }) =>
               applyAct(act, { tooth, comment, date, status, cost })
             }
-            onUpdate={(treatmentId, patch) => updateTreatment(treatmentId, patch)}
-            onDelete={(treatmentId) => deleteTreatment(treatmentId)}
+            onUpdate={async (treatmentId, patch) => {
+              try {
+                await updateTreatment(treatmentId, patch)
+                toast.success(t('toast.careSaved'))
+              } catch (err) {
+                toast.error(t('toast.careError'), carePersistError(err))
+                throw err
+              }
+            }}
+            onDelete={async (treatmentId) => {
+              try {
+                await deleteTreatment(treatmentId)
+                toast.success(t('toast.careDeleted'))
+              } catch (err) {
+                toast.error(t('toast.careError'), carePersistError(err))
+                throw err
+              }
+            }}
           />
         </>
       )}

@@ -108,3 +108,10 @@ export async function updateTreatment(id: string, body: Record<string, unknown>)
   })
   return data.treatment
 }
+
+export async function deleteTreatment(id: string) {
+  await cloudApi<{ ok?: boolean }>({
+    method: 'DELETE',
+    path: `/treatments/${id}`,
+  })
+}

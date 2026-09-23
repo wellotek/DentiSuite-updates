@@ -24,9 +24,9 @@ interface CareTableProps {
     careStatus: CareStatus
     comment: string
     cost: number
-  }) => void
-  onUpdate: (id: string, patch: Partial<Treatment>) => void
-  onDelete: (id: string) => void
+  }) => void | Promise<void>
+  onUpdate: (id: string, patch: Partial<Treatment>) => void | Promise<void>
+  onDelete: (id: string) => void | Promise<void>
 }
 
 export function CareTable({
@@ -50,6 +50,7 @@ export function CareTable({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<CareDraft | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setStatus(defaultStatus)
@@ -82,17 +83,22 @@ export function CareTable({
     setOpen(false)
   }
 
-  function submit() {
-    if (!suggested) return
-    onAdd({
-      date,
-      tooth: tooth || '—',
-      act: suggested,
-      careStatus: status,
-      comment,
-      cost: parseTariff(tariff, suggested.tariff),
-    })
-    resetQuickRow()
+  async function submit() {
+    if (!suggested || saving) return
+    setSaving(true)
+    try {
+      await onAdd({
+        date,
+        tooth: tooth || '—',
+        act: suggested,
+        careStatus: status,
+        comment,
+        cost: parseTariff(tariff, suggested.tariff),
+      })
+      resetQuickRow()
+    } finally {
+      setSaving(false)
+    }
   }
 
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -115,17 +121,22 @@ export function CareTable({
     })
   }
 
-  function saveEdit(id: string) {
-    if (!draft) return
-    onUpdate(id, {
-      date: draft.date,
-      tooth: draft.tooth || '—',
-      cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
-      comment: draft.comment,
-      careStatus: draft.careStatus,
-    })
-    setEditingId(null)
-    setDraft(null)
+  async function saveEdit(id: string) {
+    if (!draft || saving) return
+    setSaving(true)
+    try {
+      await onUpdate(id, {
+        date: draft.date,
+        tooth: draft.tooth || '—',
+        cost: Math.max(0, Math.round(Number(draft.cost) || 0)),
+        comment: draft.comment,
+        careStatus: draft.careStatus,
+      })
+      setEditingId(null)
+      setDraft(null)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -247,8 +258,8 @@ export function CareTable({
               <td className="px-3 py-2 text-end">
                 <button
                   type="button"
-                  onClick={submit}
-                  disabled={!suggested}
+                  onClick={() => void submit()}
+                  disabled={!suggested || saving}
                   className="inline-flex items-center gap-1 rounded-md bg-clinic-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-clinic-800 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -267,7 +278,7 @@ export function CareTable({
                       value={editing ? draft.date : line.date.slice(0, 10)}
                       onChange={(e) => {
                         if (editing) setDraft({ ...draft, date: e.target.value })
-                        else onUpdate(line.id, { date: e.target.value })
+                        else void onUpdate(line.id, { date: e.target.value })
                       }}
                       className="w-[138px] rounded-md border border-transparent bg-transparent px-1 py-1 text-xs text-slate-600 outline-none hover:border-slate-200 focus:border-clinic-400"
                     />
@@ -318,7 +329,7 @@ export function CareTable({
                     ) : (
                       <select
                         value={line.careStatus}
-                        onChange={(e) => onUpdate(line.id, { careStatus: e.target.value as CareStatus })}
+                        onChange={(e) => void onUpdate(line.id, { careStatus: e.target.value as CareStatus })}
                         className={`rounded-full border-0 px-2 py-0.5 text-[11px] font-semibold ${
                           line.careStatus === 'fait'
                             ? 'bg-emerald-50 text-emerald-700'
@@ -349,8 +360,14 @@ export function CareTable({
                           <button
                             type="button"
                             onClick={() => {
-                              onDelete(line.id)
-                              setConfirmDeleteId(null)
+                              void (async () => {
+                                try {
+                                  await onDelete(line.id)
+                                  setConfirmDeleteId(null)
+                                } catch {
+                                  /* toast handled by PatientChart */
+                                }
+                              })()
                             }}
                             className="rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
                           >
@@ -368,7 +385,7 @@ export function CareTable({
                         <>
                           <button
                             type="button"
-                            onClick={() => saveEdit(line.id)}
+                            onClick={() => void saveEdit(line.id)}
                             className="inline-flex items-center gap-1 rounded-md bg-clinic-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-clinic-800"
                           >
                             <Check className="h-3.5 w-3.5" />

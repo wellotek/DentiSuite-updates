@@ -9,7 +9,7 @@ interface ActsPaletteProps {
   careStatus: CareStatus
   onCareStatus: (status: CareStatus) => void
   selectedCount: number
-  onApply: (act: ActItem) => void
+  onApply: (act: ActItem) => void | Promise<void>
   onToggleFavorite: (id: string) => void
 }
 

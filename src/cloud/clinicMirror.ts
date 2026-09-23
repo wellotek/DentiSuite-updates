@@ -27,6 +27,7 @@ import { listInvoices, type CloudInvoice } from './modules/billing'
 import {
   listOrgConsultations,
   listOrgTreatments,
+  listTreatments,
   type CloudConsultation,
   type CloudTreatment,
 } from './modules/clinical'
@@ -221,7 +222,7 @@ export async function fetchClinicMirror(options?: {
     try {
       return await fetchAllPages(fetchPage, baseQuery, { limit: lim, label })
     } catch (err) {
-      // Patients are the source of truth for the cabinet roster — never silently wipe them.
+      // Patients: never pretend the list is empty after a read failure.
       if (label === 'patients') throw err
       console.warn(`[clinicMirror] ${label} skipped:`, err)
       return []
@@ -235,7 +236,6 @@ export async function fetchClinicMirror(options?: {
     invoiceItems,
     stockItems,
     prosthesisItems,
-    treatmentItems,
     consultationItems,
     prescriptionItems,
     mediaItems,
@@ -246,11 +246,23 @@ export async function fetchClinicMirror(options?: {
     safeAllPages('invoices', (q) => listInvoices(q)),
     safeAllPages('stock', (q) => listStock(q)),
     safeAllPages('prostheses', (q) => listProstheses(q)),
-    safeAllPages('treatments', (q) => listOrgTreatments(q)),
     safeAllPages('consultations', (q) => listOrgConsultations(q)),
     safeAllPages('prescriptions', (q) => listOrgPrescriptions(q)),
     safeAllPages('media', (q) => listOrgMedia(q)),
   ])
+
+  // Org GET /treatments is not on the API (404). Per-patient GET works and is fail-closed.
+  let treatmentItems: CloudTreatment[]
+  try {
+    treatmentItems = await fetchAllPages((q) => listOrgTreatments(q), {}, { limit: lim, label: 'treatments' })
+  } catch {
+    const pages = await Promise.all(
+      patientItems.map((p) =>
+        fetchAllPages((q) => listTreatments(p.id, q), {}, { limit: lim, label: 'treatments' }),
+      ),
+    )
+    treatmentItems = pages.flat()
+  }
 
   const patients = patientItems.map(mapCloudPatientToStore)
   const nameById = new Map(patients.map((p) => [p.id, `${p.firstName} ${p.lastName}`]))
