@@ -148,6 +148,45 @@ export function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+        <h2 className="text-sm font-semibold text-clinic-800">{t('settings.rxPrint')}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t('settings.rxPrintHint')}</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <label className="col-span-2 block text-xs font-medium text-slate-600">
+            {t('settings.rxPrint')}
+            <select
+              value={settings.prescriptionPrintLayout || 'classic'}
+              onChange={(e) =>
+                patch({
+                  prescriptionPrintLayout: e.target.value === 'elegante' ? 'elegante' : 'classic',
+                })
+              }
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+            >
+              <option value="classic">{t('rx.layoutClassic')}</option>
+              <option value="elegante">{t('rx.layoutElegante')}</option>
+            </select>
+          </label>
+          <Field
+            label={t('settings.practitionerAr')}
+            value={settings.practitionerArabicName || ''}
+            onChange={(practitionerArabicName) => patch({ practitionerArabicName })}
+          />
+          <Field
+            label={t('settings.orderNumber')}
+            value={settings.orderNumber || ''}
+            onChange={(orderNumber) => patch({ orderNumber })}
+          />
+          <div className="col-span-2">
+            <Field
+              label={t('settings.rxFooterAr')}
+              value={settings.prescriptionFooterAr || ''}
+              onChange={(prescriptionFooterAr) => patch({ prescriptionFooterAr })}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
         <div className="mb-2 flex items-center gap-2 text-clinic-800">
           <Pill className="h-4 w-4" />
           <h2 className="text-sm font-semibold">{t('settings.medications')}</h2>

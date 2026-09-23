@@ -9,7 +9,7 @@ import {
   PRESCRIPTION_TEMPLATES,
   prescriptionSummary,
 } from '../lib/prescriptions'
-import { printPrescription } from '../lib/prescriptionReport'
+import { prescriptionPrintContextFromClinic, printPrescription } from '../lib/prescriptionReport'
 import type { Prescription, PrescriptionDraft } from '../types'
 import { PrescriptionEditor } from '../components/prescriptions/PrescriptionEditor'
 import { dentistName } from '../lib/dentists'
@@ -55,7 +55,12 @@ export function Prescriptions() {
   function printRx(rx: Prescription | PrescriptionDraft) {
     console.log('[PDF] Button clicked')
     const full: Prescription = 'id' in rx ? rx : { ...rx, id: 'preview' }
-    void printPrescription(full, settings, loc).catch((error) => {
+    void printPrescription(
+      full,
+      settings,
+      loc,
+      prescriptionPrintContextFromClinic(full, { patients, dentists }),
+    ).catch((error) => {
       const err = error instanceof Error ? error : new Error(String(error))
       console.error('[PDF] Print failed:', err.message, err.stack)
     })
@@ -98,6 +103,36 @@ export function Prescriptions() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t('rx.templates')}</p>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => {
+              const dentist = dentists[0]
+              setEditing({
+                ...emptyPrescriptionDraft(),
+                title: t('rx.defaultTitle'),
+                printLayout: 'elegante',
+                patientId: contextPatient?.id,
+                patientName: contextPatient
+                  ? `${contextPatient.firstName} ${contextPatient.lastName}`
+                  : '',
+                patientPhone: contextPatient?.phone,
+                dentistId: dentist?.id,
+                dentistName: dentist ? dentistName(dentist) : '',
+              })
+            }}
+            className="rounded-xl border border-clinic-200 bg-clinic-50/50 p-4 text-start shadow-card transition hover:border-clinic-400 hover:bg-clinic-50"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-clinic-700 text-white">
+                <FileText className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{t('rx.layoutElegante')}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t('rx.layoutEleganteHint')}</p>
+                <p className="mt-2 text-[11px] text-slate-400">{t('rx.useTemplate')}</p>
+              </div>
+            </div>
+          </button>
           {PRESCRIPTION_TEMPLATES.map((tpl) => (
             <button
               key={tpl.id}

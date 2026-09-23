@@ -1,7 +1,14 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Eye, Plus, Printer, Trash2, X } from 'lucide-react'
-import type { Dentist, Patient, Prescription, PrescriptionDraft, PrescriptionLine } from '../../types'
+import type {
+  Dentist,
+  Patient,
+  Prescription,
+  PrescriptionDraft,
+  PrescriptionLine,
+  PrescriptionPrintLayout,
+} from '../../types'
 import { dentistName } from '../../lib/dentists'
 import { toISODate } from '../../lib/agenda'
 import { newPrescriptionLine } from '../../lib/prescriptions'
@@ -47,6 +54,7 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
     date: string
     title: string
     templateId?: string
+    printLayout?: PrescriptionPrintLayout
     lines: PrescriptionLine[]
     advice: string
     dentistId: string
@@ -60,6 +68,7 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
       date: initial.date || toISODate(new Date()),
       title: initial.title,
       templateId: initial.templateId,
+      printLayout: initial.printLayout || settings?.prescriptionPrintLayout,
       lines: initial.lines.length ? initial.lines : [newPrescriptionLine()],
       advice: initial.advice,
       dentistId: initial.dentistId || dentists[0]?.id || '',
@@ -129,6 +138,8 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
       date: form.date || toISODate(new Date()),
       title: form.title.trim() || t('rx.defaultTitle'),
       templateId: form.templateId,
+      printLayout: form.printLayout,
+      patientPhone: walkIn ? undefined : selected?.phone,
       lines,
       advice: form.advice.trim(),
       dentistId: dentist?.id,
@@ -149,7 +160,12 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
     const draft = buildDraft()
     if (!draft || !settings) return
     const full: Prescription = savedId ? { ...draft, id: savedId } : { ...draft, id: 'preview' }
-    setPreviewHtml(prescriptionPreviewHtml(full, settings, locale))
+    setPreviewHtml(
+      prescriptionPreviewHtml(full, settings, locale, {
+        patient: selectedPatient,
+        dentist: dentists.find((d) => d.id === form.dentistId),
+      }),
+    )
   }
 
   return createPortal(
@@ -263,6 +279,22 @@ export function PrescriptionEditor({ patients, dentists, initial, onClose, onSav
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
               />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">
+              {t('rx.printLayout')}
+              <select
+                value={form.printLayout || settings?.prescriptionPrintLayout || 'classic'}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    printLayout: e.target.value === 'elegante' ? 'elegante' : 'classic',
+                  })
+                }
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-clinic-400"
+              >
+                <option value="classic">{t('rx.layoutClassic')}</option>
+                <option value="elegante">{t('rx.layoutElegante')}</option>
+              </select>
             </label>
             <label className="block text-xs font-medium text-slate-600">
               {t('rx.dentist')}

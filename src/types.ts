@@ -57,6 +57,8 @@ export interface Dentist {
   color: string
 }
 
+export type PrescriptionPrintLayout = 'classic' | 'elegante'
+
 export interface ClinicSettings {
   name: string
   address: string
@@ -68,6 +70,11 @@ export interface ClinicSettings {
   timeFormat: TimeFormat
   timezone: string
   locale: Locale
+  /** Visual prescription sheet. Default (unset) = classic. */
+  prescriptionPrintLayout?: PrescriptionPrintLayout
+  practitionerArabicName?: string
+  orderNumber?: string
+  prescriptionFooterAr?: string
 }
 
 export interface Patient {
@@ -268,6 +275,10 @@ export interface Prescription {
   advice: string
   dentistId?: string
   dentistName: string
+  /** Snapshot phone from the selected patient (print can also resolve live). */
+  patientPhone?: string
+  /** Visual sheet for this prescription; falls back to clinic settings. */
+  printLayout?: PrescriptionPrintLayout
 }
 
 export type PrescriptionDraft = Omit<Prescription, 'id'>

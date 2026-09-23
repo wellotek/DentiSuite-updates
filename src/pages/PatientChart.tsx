@@ -32,7 +32,7 @@ import { emptyPrescriptionDraft } from '../lib/prescriptions'
 import { toISODate } from '../lib/agenda'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
 import { CloudClientError, cloudErrorLabel } from '../cloud/errors'
-import { printPrescription } from '../lib/prescriptionReport'
+import { prescriptionPrintContextFromClinic, printPrescription } from '../lib/prescriptionReport'
 
 type ChartTab = 'soins' | 'seances' | 'imagerie'
 type ChartModal = 'rx' | 'appointment' | 'prosthesis' | null
@@ -192,7 +192,12 @@ export function PatientChart() {
 
   function printRx(rx: Prescription | PrescriptionDraft) {
     const full: Prescription = 'id' in rx ? rx : { ...rx, id: 'preview' }
-    void printPrescription(full, clinic.settings, loc)
+    void printPrescription(
+      full,
+      clinic.settings,
+      loc,
+      prescriptionPrintContextFromClinic(full, clinic),
+    )
   }
 
   return (

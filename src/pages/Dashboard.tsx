@@ -31,7 +31,7 @@ import { emptyPrescriptionDraft } from '../lib/prescriptions'
 import { dentistName } from '../lib/dentists'
 import { isCloudClinicMode } from '../cloud/cloudClinicMode'
 import { useToast } from '../components/ui/Toast'
-import { printPrescription } from '../lib/prescriptionReport'
+import { prescriptionPrintContextFromClinic, printPrescription } from '../lib/prescriptionReport'
 
 const statusLabel: Record<AppointmentStatus, string> = {
   confirme: 'Confirmé',
@@ -210,7 +210,12 @@ export function Dashboard() {
 
   function printRx(rx: Prescription | PrescriptionDraft) {
     const full: Prescription = 'id' in rx ? rx : { ...rx, id: 'preview' }
-    void printPrescription(full, clinic.settings, loc)
+    void printPrescription(
+      full,
+      clinic.settings,
+      loc,
+      prescriptionPrintContextFromClinic(full, clinic),
+    )
   }
 
   const rxDraft = useMemo(() => {

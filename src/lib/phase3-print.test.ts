@@ -116,6 +116,63 @@ describe('phase3 shared A4 print engine', () => {
     expect(html).toContain('Cachet et signature')
     expect(html).toContain('Cabinet Test')
   })
+
+  it('elegant layout uses live clinic/patient data and keeps A4 portrait', () => {
+    localStorage.clear()
+    const rx: Prescription = {
+      id: 'rx-e',
+      patientId: 'p-e',
+      patientName: 'Karim Benali',
+      patientAge: 52,
+      patientPhone: '0555123456',
+      date: '2026-09-23',
+      title: 'Ordonnance',
+      printLayout: 'elegante',
+      lines: [
+        { id: 'l1', drug: 'Paracétamol 1 g', posology: '1 cp x 3/j', duration: '5 jours', notes: '' },
+        { id: 'l2', drug: 'Chlorhexidine', posology: '2 rinçages/j', duration: '7 jours', notes: '' },
+      ],
+      advice: 'Reconsulter si fièvre',
+      dentistName: 'Dr. Amine El Amrani',
+    }
+    const elegantSettings: ClinicSettings = {
+      ...settings,
+      name: 'Cabinet Test',
+      phone: '021 11 22 33',
+      address: '12 rue Didouche Mourad, Alger',
+      prescriptionPrintLayout: 'elegante',
+      practitionerArabicName: 'عيادة الاختبار',
+      orderNumber: '998877',
+      prescriptionFooterAr: 'نتمنى لكم الشفاء العاجل',
+    }
+    const html = buildPrescriptionHtml(rx, elegantSettings, 'fr-DZ', {
+      patient: {
+        firstName: 'Karim',
+        lastName: 'Benali',
+        phone: '0555123456',
+        age: 52,
+        birthDate: '1974-08-22',
+      },
+      dentist: { firstName: 'Amine', lastName: 'El Amrani', specialty: 'Omnipratique' },
+    })
+    expect(html).toContain('sheet-elegante')
+    expect(html).toContain('@page {')
+    expect(html).toContain('A4 portrait')
+    expect(html).toContain('ORDONNANCE')
+    expect(html).toContain('Karim')
+    expect(html).toContain('Benali')
+    expect(html).toContain('0555123456')
+    expect(html).toContain('Dr. Amine El Amrani')
+    expect(html).toContain('N° d’ordre : 998877')
+    expect(html).toContain('Paracétamol 1 g')
+    expect(html).toContain('Chlorhexidine')
+    expect(html).toContain('021 11 22 33')
+    expect(html).toContain('12 rue Didouche Mourad, Alger')
+    expect(html).toContain('rx-e-watermark')
+    expect(html).not.toContain('BENAISSA')
+    expect(html).not.toContain('34302266')
+    expect(html).not.toContain('065590642525')
+  })
 })
 
 describe('phase3 hydrate cost model (legacy N+1 reference)', () => {

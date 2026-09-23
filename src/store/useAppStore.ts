@@ -23,6 +23,7 @@ import type {
 } from '../types'
 import { loadClinic, saveClinic } from '../lib/storage'
 import { saveBrandingAssets } from '../lib/brandingStorage'
+import { loadRxPrintPrefs, saveRxPrintPrefs } from '../lib/rxPrintPrefs'
 import { activateLicense as activateLicenseRequest, loadLicenseStatus, retryLicense as retryLicenseRequest } from '../lib/license'
 import type { LicenseStatus } from '../types'
 import { dentistName } from '../lib/dentists'
@@ -306,6 +307,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
     replaceClinicMirror: (clinic) => {
       const prevSettings = get().clinic.settings
+      const prefs = loadRxPrintPrefs()
       set({
         clinic: {
           ...clinic,
@@ -313,6 +315,19 @@ export const useAppStore = create<AppStore>((set, get) => {
             ...clinic.settings,
             logo: clinic.settings.logo || prevSettings.logo || '',
             adminPhoto: clinic.settings.adminPhoto || prevSettings.adminPhoto || '',
+            prescriptionPrintLayout:
+              prevSettings.prescriptionPrintLayout ||
+              prefs.prescriptionPrintLayout ||
+              clinic.settings.prescriptionPrintLayout,
+            practitionerArabicName:
+              prevSettings.practitionerArabicName ||
+              prefs.practitionerArabicName ||
+              clinic.settings.practitionerArabicName,
+            orderNumber: prevSettings.orderNumber || prefs.orderNumber || clinic.settings.orderNumber,
+            prescriptionFooterAr:
+              prevSettings.prescriptionFooterAr ||
+              prefs.prescriptionFooterAr ||
+              clinic.settings.prescriptionFooterAr,
           },
         },
       })
@@ -858,6 +873,19 @@ export const useAppStore = create<AppStore>((set, get) => {
           adminPhoto: next.settings.adminPhoto,
         }).catch(() => undefined)
       }
+      if (
+        patch.prescriptionPrintLayout !== undefined ||
+        patch.practitionerArabicName !== undefined ||
+        patch.orderNumber !== undefined ||
+        patch.prescriptionFooterAr !== undefined
+      ) {
+        saveRxPrintPrefs({
+          prescriptionPrintLayout: next.settings.prescriptionPrintLayout,
+          practitionerArabicName: next.settings.practitionerArabicName,
+          orderNumber: next.settings.orderNumber,
+          prescriptionFooterAr: next.settings.prescriptionFooterAr,
+        })
+      }
     },
 
     upsertMedication: (item) => {
@@ -1163,7 +1191,11 @@ export const useAppStore = create<AppStore>((set, get) => {
           lines: draft.lines,
         })
           .then((created) => {
-            const mapped = mapCloudPrescriptionToStore(created, draft.patientName)
+            const mapped = {
+              ...mapCloudPrescriptionToStore(created, draft.patientName),
+              printLayout: draft.printLayout,
+              patientPhone: draft.patientPhone,
+            }
             persist({
               ...get().clinic,
               prescriptions: [

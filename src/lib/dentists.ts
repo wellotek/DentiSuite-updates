@@ -1,6 +1,6 @@
 import type { Dentist } from '../types'
 
-export function dentistName(d: Dentist) {
+export function dentistName(d: Pick<Dentist, 'firstName' | 'lastName'>) {
   return `Dr. ${d.firstName} ${d.lastName}`
 }
 
